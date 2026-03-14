@@ -56,6 +56,53 @@ type PortalClientProps = {
   managedStudents?: ManagedStudent[];
 };
 
+type SeasonCRoundSummary = {
+  round: number;
+  averageScore: number;
+  myScore: number | null;
+};
+
+type SeasonCRoundDetail = {
+  round: number;
+  myScore: number | null;
+  averageScore: number;
+  myVsAverage: "above" | "equal" | "below" | "unknown";
+  histogram: Array<{
+    label: string;
+    start: number;
+    end: number;
+    count: number;
+  }>;
+  classStats: Array<{
+    className: string;
+    average: number;
+    max: number;
+    min: number;
+    count: number;
+  }>;
+  questionStats: Array<{
+    question: number;
+    choices: Array<{
+      choice: number;
+      count: number;
+      rate: number;
+    }>;
+  }>;
+};
+
+type SeasonCResponse = {
+  ok: boolean;
+  season: "C";
+  maxRound: number;
+  yMax: number;
+  binSize: number;
+  data: {
+    rounds: SeasonCRoundSummary[];
+    details: SeasonCRoundDetail[];
+  };
+  message?: string;
+};
+
 const seasons = [
   { id: "C", title: "Season C", subtitle: "시즌 C 성적 확인" },
   { id: "M", title: "Season M", subtitle: "시즌 M 성적 확인" },
@@ -148,6 +195,13 @@ function getTargetUniversity(value?: string | null) {
   return "seoul";
 }
 
+function getVsAverageLabel(value: SeasonCRoundDetail["myVsAverage"]) {
+  if (value === "above") return "평균보다 높음";
+  if (value === "below") return "평균보다 낮음";
+  if (value === "equal") return "평균과 동일";
+  return "내 점수 없음";
+}
+
 export default function PortalClient({
   mode = "student",
   initialSessionUser = null,
@@ -178,6 +232,10 @@ export default function PortalClient({
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<ManagedStudent | null>(null);
   const [isLoadingStudent, setIsLoadingStudent] = useState(false);
+  const [seasonCData, setSeasonCData] = useState<SeasonCResponse["data"] | null>(null);
+  const [seasonCLoading, setSeasonCLoading] = useState(false);
+  const [seasonCError, setSeasonCError] = useState("");
+  const [selectedRound, setSelectedRound] = useState<number | null>(null);
 
   const isLoggedIn = !!sessionUser;
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
@@ -200,6 +258,26 @@ export default function PortalClient({
       student.name.toLowerCase().includes(keyword)
     );
   }, [managedStudents, studentSearch]);
+
+  const selectedRoundDetail = useMemo(() => {
+    if (!seasonCData || selectedRound === null) return null;
+    return seasonCData.details.find((detail) => detail.round === selectedRound) ?? null;
+  }, [seasonCData, selectedRound]);
+
+  const linePoints = useMemo(() => {
+    if (!seasonCData || seasonCData.rounds.length < 2) return "";
+
+    const points = seasonCData.rounds
+      .map((round, index, array) => {
+        if (round.myScore === null) return null;
+        const x = array.length === 1 ? 50 : (index / (array.length - 1)) * 100;
+        const y = 100 - round.myScore;
+        return `${x},${y}`;
+      })
+      .filter(Boolean);
+
+    return points.join(" ");
+  }, [seasonCData]);
 
   function applyProfile(profileData?: StudentProfile | null) {
     setSelectedKorean(profileData?.korean_subject || "언어와 매체");
@@ -255,6 +333,59 @@ export default function PortalClient({
       document.body.style.overflow = originalOverflow;
     };
   }, [isEditingProfile]);
+
+  useEffect(() => {
+    if (selectedSeason !== "C") return;
+    if (!canShowStudentPortal || !visibleUser?.id) return;
+
+    let cancelled = false;
+
+    const loadSeasonC = async () => {
+      setSeasonCLoading(true);
+      setSeasonCError("");
+
+      const query = isAdminMode
+        ? `?studentId=${encodeURIComponent(visibleUser.id)}`
+        : "";
+
+      try {
+        const res = await fetch(`/api/season/c${query}`, { cache: "no-store" });
+        const data = (await res.json()) as SeasonCResponse;
+
+        if (!res.ok || !data.ok) {
+          if (!cancelled) {
+            setSeasonCError(data.message || "시즌 C 데이터를 불러오지 못했습니다.");
+            setSeasonCData(null);
+            setSelectedRound(null);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setSeasonCData(data.data);
+          const defaultRound =
+            data.data.rounds.find((round) => round.myScore !== null)?.round ?? 1;
+          setSelectedRound(defaultRound);
+        }
+      } catch {
+        if (!cancelled) {
+          setSeasonCError("시즌 C 데이터를 불러오지 못했습니다.");
+          setSeasonCData(null);
+          setSelectedRound(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setSeasonCLoading(false);
+        }
+      }
+    };
+
+    loadSeasonC();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1105,40 +1236,296 @@ export default function PortalClient({
                     </div>
                   </div>
                 ) : (
-                  <div className="mx-auto w-full max-w-3xl">
-                    <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
-                      <CardHeader>
-                        <CardTitle className="text-3xl">Season {selectedSeason}</CardTitle>
-                        <CardDescription className="text-white/55">
-                          여기에 각 시즌별 시험 목록, 성적 상세, 성적 추이 화면을
-                          연결하면 됩니다.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-6 text-white/70">
-                          예시 이동 경로:{" "}
-                          <span className="font-medium text-white">
-                            /season/{selectedSeason.toLowerCase()}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                          <Button
-                            className="rounded-2xl bg-white text-black hover:bg-white/90"
-                            onClick={() => setSelectedSeason(null)}
-                          >
-                            시즌 다시 선택
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                            onClick={handleLogout}
-                          >
-                            처음 화면으로
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
+                  selectedSeason === "C" ? (
+                    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+                      <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                        <CardHeader>
+                          <CardTitle className="text-3xl">Season C (1~10회)</CardTitle>
+                          <CardDescription className="text-white/55">
+                            회차를 누르면 해당 회차 통계를 확인할 수 있습니다. 회색
+                            막대는 평균, 빨간 점과 선은 내 점수입니다.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {seasonCLoading ? (
+                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
+                              시즌 C 데이터를 불러오는 중...
+                            </div>
+                          ) : seasonCError ? (
+                            <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-6 text-red-200">
+                              {seasonCError}
+                            </div>
+                          ) : seasonCData ? (
+                            <div className="space-y-6">
+                              <div className="relative overflow-x-auto">
+                                <div className="relative h-[360px] min-w-[680px] rounded-[1.5rem] border border-white/10 bg-black/20 p-4 sm:p-6">
+                                  <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
+                                  <div className="pointer-events-none absolute inset-x-0 bottom-6 border-t border-white/20" />
+                                  <div className="pointer-events-none absolute left-4 top-4 bottom-6 border-l border-white/20 sm:left-6" />
+
+                                  <div className="absolute left-0 top-3 w-10 text-right text-xs text-white/50 sm:w-12">
+                                    100
+                                  </div>
+                                  <div className="absolute left-0 top-1/2 w-10 -translate-y-1/2 text-right text-xs text-white/50 sm:w-12">
+                                    50
+                                  </div>
+                                  <div className="absolute left-0 bottom-3 w-10 text-right text-xs text-white/50 sm:w-12">
+                                    0
+                                  </div>
+
+                                  {linePoints && (
+                                    <svg
+                                      viewBox="0 0 100 100"
+                                      className="pointer-events-none absolute left-12 top-4 right-4 bottom-10 h-[calc(100%-56px)] w-[calc(100%-64px)] sm:left-14 sm:w-[calc(100%-72px)]"
+                                      preserveAspectRatio="none"
+                                    >
+                                      <polyline
+                                        points={linePoints}
+                                        fill="none"
+                                        stroke="#ef4444"
+                                        strokeWidth="1.8"
+                                      />
+                                    </svg>
+                                  )}
+
+                                  <div className="absolute left-12 right-4 bottom-10 top-4 flex items-end justify-between gap-2 sm:left-14">
+                                    {seasonCData.rounds.map((round) => {
+                                      const averageHeight = `${round.averageScore}%`;
+                                      const isSelected = selectedRound === round.round;
+                                      const myBottom =
+                                        round.myScore === null ? null : `${round.myScore}%`;
+
+                                      return (
+                                        <button
+                                          key={round.round}
+                                          type="button"
+                                          onClick={() => setSelectedRound(round.round)}
+                                          className={`relative flex h-full w-full items-end justify-center pb-8 transition ${
+                                            isSelected ? "scale-[1.02]" : "opacity-90 hover:opacity-100"
+                                          }`}
+                                        >
+                                          <div
+                                            className={`w-8 rounded-t-md bg-white/30 transition sm:w-10 ${
+                                              isSelected ? "ring-2 ring-sky-300/60" : ""
+                                            }`}
+                                            style={{ height: averageHeight }}
+                                          />
+                                          {myBottom && (
+                                            <div
+                                              className="absolute left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border border-red-200 bg-red-500"
+                                              style={{ bottom: `calc(${myBottom} + 22px)` }}
+                                            />
+                                          )}
+                                          <div className="absolute bottom-0 text-center">
+                                            <p className="text-sm font-medium text-white/90">
+                                              {round.round}회
+                                            </p>
+                                            <p className="text-[11px] text-white/45">
+                                              평균 {round.averageScore}
+                                            </p>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {!seasonCData.rounds.some((round) => round.myScore !== null) && (
+                                <p className="text-sm text-amber-200/90">
+                                  현재 업로드된 시즌 C 응답에서 본인 데이터가 없어 빨간
+                                  점은 표시되지 않습니다.
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
+                              시즌 C 데이터가 없습니다.
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {selectedRoundDetail && (
+                        <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                          <CardHeader>
+                            <CardTitle className="text-2xl">
+                              C시즌 {selectedRoundDetail.round}회 상세 통계
+                            </CardTitle>
+                            <CardDescription className="text-white/55">
+                              내 점수와 분포, 반별 통계, 문항별 선지 선택률을 확인할 수
+                              있습니다.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-6">
+                            <div className="grid gap-4 md:grid-cols-3">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">내 점수</p>
+                                <p className="mt-2 text-3xl font-semibold text-red-300">
+                                  {selectedRoundDetail.myScore ?? "-"}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">평균 점수</p>
+                                <p className="mt-2 text-3xl font-semibold">
+                                  {selectedRoundDetail.averageScore}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">비교</p>
+                                <p className="mt-2 text-xl font-semibold text-sky-200">
+                                  {getVsAverageLabel(selectedRoundDetail.myVsAverage)}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <p className="mb-4 text-sm text-white/55">점수 분포 (10점 단위)</p>
+                              <div className="grid grid-cols-5 gap-3 sm:grid-cols-11">
+                                {selectedRoundDetail.histogram.map((bin) => {
+                                  const maxCount = Math.max(
+                                    ...selectedRoundDetail.histogram.map((item) => item.count),
+                                    1
+                                  );
+                                  const height = Math.max((bin.count / maxCount) * 100, 4);
+
+                                  return (
+                                    <div key={bin.label} className="flex flex-col items-center gap-2">
+                                      <div className="text-xs text-white/50">{bin.count}</div>
+                                      <div className="flex h-28 items-end">
+                                        <div
+                                          className="w-4 rounded-t bg-sky-300/70"
+                                          style={{ height: `${height}%` }}
+                                        />
+                                      </div>
+                                      <div className="text-[11px] text-white/45">{bin.label}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="grid gap-4 xl:grid-cols-2">
+                              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                                <div className="border-b border-white/10 px-4 py-3">
+                                  <p className="text-sm text-white/55">반별 통계</p>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full min-w-[440px] text-sm">
+                                    <thead className="text-white/55">
+                                      <tr>
+                                        <th className="px-4 py-3 text-left">반</th>
+                                        <th className="px-4 py-3 text-left">인원</th>
+                                        <th className="px-4 py-3 text-left">평균</th>
+                                        <th className="px-4 py-3 text-left">최고</th>
+                                        <th className="px-4 py-3 text-left">최저</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {selectedRoundDetail.classStats.map((row) => (
+                                        <tr key={row.className} className="border-t border-white/10">
+                                          <td className="px-4 py-3">{row.className}</td>
+                                          <td className="px-4 py-3">{row.count}</td>
+                                          <td className="px-4 py-3">{row.average}</td>
+                                          <td className="px-4 py-3">{row.max}</td>
+                                          <td className="px-4 py-3">{row.min}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+
+                              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                                <div className="border-b border-white/10 px-4 py-3">
+                                  <p className="text-sm text-white/55">
+                                    문항별 선지 선택률 (스크롤 가능)
+                                  </p>
+                                </div>
+                                <div className="max-h-[300px] overflow-auto">
+                                  <table className="w-full min-w-[420px] text-sm">
+                                    <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
+                                      <tr>
+                                        <th className="px-3 py-3 text-left">문항</th>
+                                        <th className="px-3 py-3 text-left">1</th>
+                                        <th className="px-3 py-3 text-left">2</th>
+                                        <th className="px-3 py-3 text-left">3</th>
+                                        <th className="px-3 py-3 text-left">4</th>
+                                        <th className="px-3 py-3 text-left">5</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {selectedRoundDetail.questionStats.map((question) => (
+                                        <tr
+                                          key={question.question}
+                                          className="border-t border-white/10"
+                                        >
+                                          <td className="px-3 py-3">{question.question}번</td>
+                                          {question.choices.map((choice) => (
+                                            <td key={choice.choice} className="px-3 py-3">
+                                              {choice.rate}%
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          className="rounded-2xl bg-white text-black hover:bg-white/90"
+                          onClick={() => setSelectedSeason(null)}
+                        >
+                          시즌 다시 선택
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          onClick={handleLogout}
+                        >
+                          처음 화면으로
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mx-auto w-full max-w-3xl">
+                      <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                        <CardHeader>
+                          <CardTitle className="text-3xl">Season {selectedSeason}</CardTitle>
+                          <CardDescription className="text-white/55">
+                            이 시즌은 아직 연결 전입니다. 먼저 시즌 C 화면을 완성해둔
+                            상태입니다.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-6 text-white/70">
+                            다음 연결 대상: /season/{selectedSeason.toLowerCase()}
+                          </div>
+                          <div className="flex flex-wrap gap-3">
+                            <Button
+                              className="rounded-2xl bg-white text-black hover:bg-white/90"
+                              onClick={() => setSelectedSeason(null)}
+                            >
+                              시즌 다시 선택
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                              onClick={handleLogout}
+                            >
+                              처음 화면으로
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )
                 )}
               </motion.div>
             )}
