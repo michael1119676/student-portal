@@ -10,6 +10,7 @@ type RawRoundRow = {
   name: string;
   className: string;
   timestamp: string;
+  score: number | null;
   answers: Array<number | null>;
 };
 
@@ -114,6 +115,16 @@ function normalizeChoice(value: number | null | undefined) {
   return rounded;
 }
 
+function normalizeScore(value: number | null | undefined) {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n);
+  if (rounded < 0) return 0;
+  if (rounded > 100) return 100;
+  return rounded;
+}
+
 function scoreFromAnswers(round: number, answers: Array<number | null>) {
   const key = ANSWER_KEYS[round];
   if (!key || key.length === 0) return null;
@@ -182,11 +193,12 @@ function buildRoundRows(round: number, rawRound: RawRound, students: StudentRef[
     if (!matched) continue;
 
     const answers = row.answers.map((value) => normalizeChoice(value));
+    const scoreFromSheet = normalizeScore(row.score);
     result.push({
       studentId: matched.id,
       name: matched.name,
       className: row.className || matched.class_name || "미분류",
-      score: scoreFromAnswers(round, answers),
+      score: scoreFromSheet ?? scoreFromAnswers(round, answers),
       answers,
     });
   }
