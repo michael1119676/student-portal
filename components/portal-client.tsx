@@ -82,6 +82,9 @@ type SeasonCRoundDetail = {
   }>;
   questionStats: Array<{
     question: number;
+    correctChoice: number | null;
+    myChoice: number | null;
+    isWrong: boolean;
     choices: Array<{
       choice: number;
       count: number;
@@ -217,6 +220,7 @@ export default function PortalClient({
   const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [loginFailCount, setLoginFailCount] = useState(0);
 
   const [selectedKorean, setSelectedKorean] = useState("언어와 매체");
   const [selectedMath, setSelectedMath] = useState("미적분");
@@ -409,6 +413,7 @@ export default function PortalClient({
 
     if (!res.ok) {
       setLoginError(data.message || "로그인에 실패했습니다.");
+      setLoginFailCount((prev) => prev + 1);
       return;
     }
 
@@ -422,6 +427,7 @@ export default function PortalClient({
     setStudentName(user.name);
     setPhone(user.phone);
     setPin("");
+    setLoginFailCount(0);
     applyProfile(data.profile as StudentProfile | undefined);
   };
 
@@ -438,6 +444,7 @@ export default function PortalClient({
     setPhone("");
     setPin("");
     setLoginError("");
+    setLoginFailCount(0);
     setIsEditingProfile(false);
     setSaveMessage("");
     window.location.href = "/";
@@ -718,6 +725,14 @@ export default function PortalClient({
                       {loginError && (
                         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                           {loginError}
+                        </div>
+                      )}
+
+                      {loginFailCount >= 5 && (
+                        <div className="rounded-2xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                          로그인 5번 실패 시 비밀번호 초기화 및 로그인 문의는 카카오톡
+                          아이디 `jwlee2670` 또는 `010-3676-2670`으로 연락 주시면
+                          빠르게 조치 후 연락드리겠습니다.
                         </div>
                       )}
 
@@ -1439,14 +1454,16 @@ export default function PortalClient({
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                                 <div className="border-b border-white/10 px-4 py-3">
                                   <p className="text-sm text-white/55">
-                                    문항별 선지 선택률 (스크롤 가능)
+                                    문항별 선지 선택률 (정답/내답 포함, 스크롤 가능)
                                   </p>
                                 </div>
                                 <div className="max-h-[300px] overflow-auto">
-                                  <table className="w-full min-w-[420px] text-sm">
+                                  <table className="w-full min-w-[560px] text-sm">
                                     <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
                                       <tr>
                                         <th className="px-3 py-3 text-left">문항</th>
+                                        <th className="px-3 py-3 text-left">정답</th>
+                                        <th className="px-3 py-3 text-left">내답</th>
                                         <th className="px-3 py-3 text-left">1</th>
                                         <th className="px-3 py-3 text-left">2</th>
                                         <th className="px-3 py-3 text-left">3</th>
@@ -1458,11 +1475,32 @@ export default function PortalClient({
                                       {selectedRoundDetail.questionStats.map((question) => (
                                         <tr
                                           key={question.question}
-                                          className="border-t border-white/10"
+                                          className={`border-t border-white/10 ${
+                                            question.isWrong ? "bg-red-500/10" : ""
+                                          }`}
                                         >
                                           <td className="px-3 py-3">{question.question}번</td>
+                                          <td className="px-3 py-3 text-emerald-300">
+                                            {question.correctChoice ?? "-"}
+                                          </td>
+                                          <td
+                                            className={`px-3 py-3 ${
+                                              question.isWrong
+                                                ? "font-semibold text-red-300"
+                                                : "text-white"
+                                            }`}
+                                          >
+                                            {question.myChoice ?? "-"}
+                                          </td>
                                           {question.choices.map((choice) => (
-                                            <td key={choice.choice} className="px-3 py-3">
+                                            <td
+                                              key={choice.choice}
+                                              className={`px-3 py-3 ${
+                                                choice.choice === question.correctChoice
+                                                  ? "font-semibold text-emerald-300"
+                                                  : ""
+                                              }`}
+                                            >
                                               {choice.rate}%
                                             </td>
                                           ))}
@@ -1473,6 +1511,9 @@ export default function PortalClient({
                                 </div>
                               </div>
                             </div>
+                            <p className="text-xs text-white/50">
+                              빨간 줄은 내 오답 문항, 초록색은 정답 번호입니다.
+                            </p>
                           </CardContent>
                         </Card>
                       )}
@@ -1499,13 +1540,16 @@ export default function PortalClient({
                         <CardHeader>
                           <CardTitle className="text-3xl">Season {selectedSeason}</CardTitle>
                           <CardDescription className="text-white/55">
-                            이 시즌은 아직 연결 전입니다. 먼저 시즌 C 화면을 완성해둔
-                            상태입니다.
+                            {selectedSeason === "N" || selectedSeason === "M"
+                              ? `Season ${selectedSeason}은 현재 업데이트 예정입니다.`
+                              : "이 시즌은 아직 연결 전입니다. 먼저 시즌 C 화면을 완성해둔 상태입니다."}
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-6 text-white/70">
-                            다음 연결 대상: /season/{selectedSeason.toLowerCase()}
+                            {selectedSeason === "N" || selectedSeason === "M"
+                              ? "업데이트 예정입니다. 조금만 기다려 주세요."
+                              : `다음 연결 대상: /season/${selectedSeason.toLowerCase()}`}
                           </div>
                           <div className="flex flex-wrap gap-3">
                             <Button

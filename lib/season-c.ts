@@ -54,6 +54,9 @@ export type ClassStat = {
 
 export type QuestionStat = {
   question: number;
+  correctChoice: number | null;
+  myChoice: number | null;
+  isWrong: boolean;
   choices: Array<{
     choice: number;
     count: number;
@@ -229,7 +232,12 @@ function buildClassStats(rows: RoundRow[]) {
     .sort((a, b) => a.className.localeCompare(b.className, "ko"));
 }
 
-function buildQuestionStats(rows: RoundRow[], questionCount: number) {
+function buildQuestionStats(
+  rows: RoundRow[],
+  questionCount: number,
+  answerKey: number[],
+  myAnswers: Array<number | null>
+) {
   const result: QuestionStat[] = [];
 
   for (let i = 0; i < questionCount; i += 1) {
@@ -246,8 +254,15 @@ function buildQuestionStats(rows: RoundRow[], questionCount: number) {
       validCount += 1;
     }
 
+    const correctChoice = normalizeChoice(answerKey[i]);
+    const myChoice = normalizeChoice(myAnswers[i]);
+
     result.push({
       question: i + 1,
+      correctChoice,
+      myChoice,
+      isWrong:
+        myChoice !== null && correctChoice !== null && myChoice !== correctChoice,
       choices: [1, 2, 3, 4, 5].map((choice) => {
         const count = counts.get(choice) ?? 0;
         return {
@@ -280,6 +295,8 @@ export function buildSeasonCViewData(students: StudentRef[], targetStudentId: st
   for (let round = 1; round <= ROUND_COUNT; round += 1) {
     const rawRound = getRawRound(data, round);
     const rows = buildRoundRows(round, rawRound, students);
+    const answerKey = ANSWER_KEYS[round] ?? [];
+    const questionCount = Math.max(rawRound.questionCount, answerKey.length);
     const validScores = rows
       .map((row) => row.score)
       .filter((value): value is number => value !== null);
@@ -291,6 +308,7 @@ export function buildSeasonCViewData(students: StudentRef[], targetStudentId: st
 
     const myRow = rows.find((row) => row.studentId === targetStudentId) ?? null;
     const myScore = myRow?.score ?? null;
+    const myAnswers = myRow?.answers ?? [];
 
     rounds.push({
       round,
@@ -312,7 +330,7 @@ export function buildSeasonCViewData(students: StudentRef[], targetStudentId: st
       myVsAverage,
       histogram: buildHistogram(rows),
       classStats: buildClassStats(rows),
-      questionStats: buildQuestionStats(rows, rawRound.questionCount),
+      questionStats: buildQuestionStats(rows, questionCount, answerKey, myAnswers),
     });
   }
 
