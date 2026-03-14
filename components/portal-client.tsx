@@ -310,7 +310,7 @@ export default function PortalClient({
     return seasonCData.rounds
       .map((round, index, array) => {
         if (round.myScore === null) return null;
-        const x = array.length === 1 ? 50 : (index / (array.length - 1)) * 100;
+        const x = ((index + 0.5) / array.length) * 100;
         const y = 100 - round.myScore;
         return { x, y };
       })
@@ -1627,48 +1627,68 @@ export default function PortalClient({
                           ) : seasonCData ? (
                             <div className="space-y-6">
                               <div className="relative overflow-x-auto">
-                                <div className="relative h-[360px] min-w-[680px] rounded-[1.5rem] border border-white/10 bg-black/20 p-4 sm:p-6">
-                                  <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
-                                  <div className="pointer-events-none absolute inset-x-0 bottom-6 border-t border-white/20" />
-                                  <div className="pointer-events-none absolute left-4 top-4 bottom-6 border-l border-white/20 sm:left-6" />
+                                <div className="relative h-[390px] min-w-[700px] rounded-[1.5rem] border border-white/10 bg-black/20 px-6 py-6">
+                                  <div className="pointer-events-none absolute inset-x-6 top-6 bottom-14">
+                                    <div className="absolute inset-x-0 top-0 border-t border-white/10" />
+                                    <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
+                                    <div className="absolute inset-x-0 bottom-0 border-t border-white/20" />
+                                    <div className="absolute inset-y-0 left-0 border-l border-white/20" />
+                                  </div>
 
-                                  <div className="absolute left-0 top-3 w-10 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 top-5 w-10 text-right text-xs text-white/50 sm:w-12">
                                     100
                                   </div>
-                                  <div className="absolute left-0 top-1/2 w-10 -translate-y-1/2 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 top-[48%] w-10 -translate-y-1/2 text-right text-xs text-white/50 sm:w-12">
                                     50
                                   </div>
-                                  <div className="absolute left-0 bottom-3 w-10 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 bottom-11 w-10 text-right text-xs text-white/50 sm:w-12">
                                     0
                                   </div>
 
                                   {linePoints && (
                                     <svg
                                       viewBox="0 0 100 100"
-                                      className="pointer-events-none absolute left-12 top-4 right-4 bottom-10 h-[calc(100%-56px)] w-[calc(100%-64px)] sm:left-14 sm:w-[calc(100%-72px)]"
+                                      className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
+                                      <defs>
+                                        <linearGradient id="myScoreLine" x1="0%" y1="0%" x2="100%" y2="0%">
+                                          <stop offset="0%" stopColor="#fda4af" />
+                                          <stop offset="45%" stopColor="#fb7185" />
+                                          <stop offset="100%" stopColor="#ef4444" />
+                                        </linearGradient>
+                                        <filter id="myScoreGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                          <feGaussianBlur stdDeviation="0.8" result="blur" />
+                                          <feMerge>
+                                            <feMergeNode in="blur" />
+                                            <feMergeNode in="SourceGraphic" />
+                                          </feMerge>
+                                        </filter>
+                                      </defs>
                                       <polyline
                                         points={linePoints}
                                         fill="none"
-                                        stroke="#ef4444"
-                                        strokeWidth="1.8"
+                                        stroke="url(#myScoreLine)"
+                                        strokeWidth="2.4"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        filter="url(#myScoreGlow)"
                                       />
                                       {myPlotPoints.map((point, index) => (
                                         <circle
                                           key={`my-point-${index}`}
                                           cx={point.x}
                                           cy={point.y}
-                                          r="1.4"
+                                          r="1.7"
                                           fill="#ef4444"
                                           stroke="#fee2e2"
-                                          strokeWidth="0.4"
+                                          strokeWidth="0.8"
                                         />
                                       ))}
                                     </svg>
                                   )}
 
-                                  <div className="absolute left-12 right-4 bottom-10 top-4 flex items-end justify-between gap-2 sm:left-14">
+                                  <div className="absolute left-12 right-6 top-6 bottom-14 grid grid-cols-10 gap-2">
                                     {seasonCData.rounds.map((round) => {
                                       const averageHeight = `${round.averageScore}%`;
                                       const isSelected = selectedRound === round.round;
@@ -1678,27 +1698,32 @@ export default function PortalClient({
                                           key={round.round}
                                           type="button"
                                           onClick={() => setSelectedRound(round.round)}
-                                          className={`relative flex h-full w-full items-end justify-center pb-8 transition ${
+                                          className={`relative flex h-full items-end justify-center transition ${
                                             isSelected ? "scale-[1.02]" : "opacity-90 hover:opacity-100"
                                           }`}
                                         >
                                           <div
-                                            className={`w-8 rounded-t-md bg-white/30 transition sm:w-10 ${
+                                            className={`w-8 rounded-t-xl bg-white/30 transition sm:w-9 ${
                                               isSelected ? "ring-2 ring-sky-300/60" : ""
                                             }`}
                                             style={{ height: averageHeight }}
                                           />
-                                          <div className="absolute bottom-0 text-center">
-                                            <p className="text-sm font-medium text-white/90">
-                                              {round.round}회
-                                            </p>
-                                            <p className="text-[11px] text-white/45">
-                                              평균 {round.averageScore}
-                                            </p>
-                                          </div>
                                         </button>
                                       );
                                     })}
+                                  </div>
+
+                                  <div className="absolute left-12 right-6 bottom-4 grid grid-cols-10 gap-2">
+                                    {seasonCData.rounds.map((round) => (
+                                      <div key={`label-${round.round}`} className="text-center">
+                                        <p className="text-sm font-medium text-white/90">
+                                          {round.round}회
+                                        </p>
+                                        <p className="text-[11px] text-white/45">
+                                          평균 {round.averageScore}
+                                        </p>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               </div>
