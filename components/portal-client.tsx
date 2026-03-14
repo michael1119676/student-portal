@@ -245,6 +245,17 @@ export default function PortalClient({
     loadSession();
   }, [isAdminMode]);
 
+  useEffect(() => {
+    if (!isEditingProfile) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isEditingProfile]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canLogin) return;
@@ -430,27 +441,27 @@ export default function PortalClient({
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.15),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_20%)]" />
         <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-          <header className="flex items-center justify-between py-2">
+          <header className="flex flex-col gap-4 py-2 lg:flex-row lg:items-start lg:justify-between">
             {!canShowStudentPortal ? (
               <div className="text-sm uppercase tracking-[0.28em] text-white/45">
                 {isAdminMode ? "Admin Portal" : "Student Portal"}
               </div>
             ) : (
-              <div className="flex items-center gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 px-3 py-3 backdrop-blur">
+              <div className="flex w-full min-w-0 items-center gap-3 rounded-[1.5rem] border border-white/10 bg-white/5 px-3 py-3 backdrop-blur lg:w-auto lg:max-w-3xl">
                 <Image
                   src={profile.image}
                   alt={profile.label}
                   width={64}
                   height={64}
-                  className="h-16 w-16 rounded-2xl bg-white p-2 object-contain"
+                  className="h-14 w-14 shrink-0 rounded-2xl bg-white p-2 object-contain sm:h-16 sm:w-16"
                 />
-                <div>
-                  <p className="text-sm text-white/45">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white/45">
                     {profile.label} 지망
                     {isAdminMode && sessionUser ? ` · 관리자 로그인: ${sessionUser.name}` : ""}
                   </p>
-                  <p className="text-lg font-semibold">{visibleUser?.name}</p>
-                  <p className="text-sm text-white/55">
+                  <p className="truncate text-lg font-semibold">{visibleUser?.name}</p>
+                  <p className="line-clamp-2 text-sm text-white/55">
                     선택과목: {selectedKorean} / {selectedMath} / {selectedScience1},{" "}
                     {selectedScience2}
                   </p>
@@ -459,11 +470,11 @@ export default function PortalClient({
             )}
 
             {isLoggedIn && (
-              <div className="flex items-center gap-3">
+              <div className="flex w-full flex-wrap items-center justify-end gap-2 lg:w-auto lg:gap-3">
                 {isAdminMode && selectedStudent && (
                   <Button
                     variant="secondary"
-                    className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                    className="h-10 rounded-2xl bg-white/10 px-3 text-sm text-white hover:bg-white/20"
                     onClick={() => {
                       setSelectedStudent(null);
                       setSelectedSeason(null);
@@ -478,7 +489,7 @@ export default function PortalClient({
                 {canShowStudentPortal && (
                   <Button
                     variant="secondary"
-                    className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                    className="h-10 rounded-2xl bg-white/10 px-3 text-sm text-white hover:bg-white/20"
                     onClick={() => setIsEditingProfile(true)}
                   >
                     <Settings className="mr-2 h-4 w-4" />
@@ -487,7 +498,7 @@ export default function PortalClient({
                 )}
                 <Button
                   variant="secondary"
-                  className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                  className="h-10 rounded-2xl bg-white/10 px-3 text-sm text-white hover:bg-white/20"
                   onClick={handleLogout}
                 >
                   로그아웃
@@ -809,8 +820,8 @@ export default function PortalClient({
                 className="flex flex-1 flex-col justify-center py-10"
               >
                 {isEditingProfile && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-                    <Card className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-[#0b0d12] text-white shadow-2xl">
+                  <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 px-4 py-4 backdrop-blur-sm sm:py-8">
+                    <Card className="mx-auto w-full max-w-2xl rounded-[2rem] border border-white/10 bg-[#0b0d12] text-white shadow-2xl">
                       <CardHeader className="flex flex-row items-start justify-between space-y-0">
                         <div>
                           <CardTitle className="text-2xl">
@@ -831,7 +842,7 @@ export default function PortalClient({
                         </button>
                       </CardHeader>
 
-                      <CardContent className="space-y-5">
+                      <CardContent className="space-y-5 pb-6">
                         <div className="grid gap-5 sm:grid-cols-2">
                           <div className="space-y-2">
                             <Label className="text-white/75">이름</Label>
