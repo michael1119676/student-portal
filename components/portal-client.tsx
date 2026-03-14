@@ -106,6 +106,36 @@ type SeasonCResponse = {
   message?: string;
 };
 
+type AdminStatsResponse = {
+  ok: boolean;
+  message?: string;
+  stats?: {
+    season: "C";
+    round: number;
+    participantCount: number;
+    averageScore: number;
+    maxScore: number;
+    minScore: number;
+    histogram: Array<{
+      label: string;
+      count: number;
+    }>;
+    classStats: Array<{
+      className: string;
+      average: number;
+      max: number;
+      min: number;
+      count: number;
+    }>;
+    weakQuestions: Array<{
+      question: number;
+      correctChoice: number | null;
+      correctRate: number;
+      answerCount: number;
+    }>;
+  };
+};
+
 const seasons = [
   { id: "C", title: "Season C", subtitle: "시즌 C 성적 확인" },
   { id: "M", title: "Season M", subtitle: "시즌 M 성적 확인" },
@@ -232,7 +262,7 @@ export default function PortalClient({
   const [newPin, setNewPin] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
 
-  const [adminStep, setAdminStep] = useState<"home" | "search" | "scores">("home");
+  const [adminStep, setAdminStep] = useState<"home" | "search" | "scores" | "stats">("home");
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<ManagedStudent | null>(null);
   const [isLoadingStudent, setIsLoadingStudent] = useState(false);
@@ -240,6 +270,11 @@ export default function PortalClient({
   const [seasonCLoading, setSeasonCLoading] = useState(false);
   const [seasonCError, setSeasonCError] = useState("");
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N">("C");
+  const [statsRound, setStatsRound] = useState(1);
+  const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
+  const [adminStatsLoading, setAdminStatsLoading] = useState(false);
+  const [adminStatsError, setAdminStatsError] = useState("");
 
   const isLoggedIn = !!sessionUser;
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
@@ -390,6 +425,124 @@ export default function PortalClient({
       cancelled = true;
     };
   }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode]);
+
+  useEffect(() => {
+    if (!isAdminMode || adminStep !== "stats") return;
+
+    let cancelled = false;
+
+    const loadAdminStats = async () => {
+      setAdminStatsLoading(true);
+      setAdminStatsError("");
+
+      try {
+        const res = await fetch(
+          `/api/admin/stats?season=${statsSeason}&round=${statsRound}`,
+          { cache: "no-store" }
+        );
+        const data = (await res.json()) as AdminStatsResponse;
+
+        if (!res.ok || !data.ok || !data.stats) {
+          if (!cancelled) {
+            setAdminStats(null);
+            setAdminStatsError(data.message || "통계를 불러오지 못했습니다.");
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setAdminStats(data.stats);
+        }
+      } catch {
+        if (!cancelled) {
+          setAdminStats(null);
+          setAdminStatsError("통계를 불러오지 못했습니다.");
+        }
+      } finally {
+        if (!cancelled) {
+          setAdminStatsLoading(false);
+        }
+      }
+    };
+
+    loadAdminStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminMode, adminStep, statsSeason, statsRound]);
+
+  function handleDownloadStatsPdf() {
+    if (!adminStats) return;
+
+    const win = window.open("", "_blank", "width=1200,height=900");
+    if (!win) {
+      setAdminStatsError("팝업이 차단되어 PDF 창을 열 수 없습니다.");
+      return;
+    }
+
+    const classRows = adminStats.classStats
+      .map(
+        (row) =>
+          `<tr><td>${row.className}</td><td>${row.count}</td><td>${row.average}</td><td>${row.max}</td><td>${row.min}</td></tr>`
+      )
+      .join("");
+
+    const weakRows = adminStats.weakQuestions
+      .slice(0, 8)
+      .map(
+        (row) =>
+          `<tr><td>${row.question}번</td><td>${row.correctChoice ?? "-"}</td><td>${row.correctRate}%</td><td>${row.answerCount}</td></tr>`
+      )
+      .join("");
+
+    const html = `
+      <html>
+        <head>
+          <title>Season ${adminStats.season} ${adminStats.round}회 통계</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 28px; color: #111; }
+            h1 { margin: 0 0 8px; font-size: 26px; }
+            p { margin: 0 0 20px; color: #555; }
+            .cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 18px; }
+            .card { border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
+            .label { color: #666; font-size: 12px; }
+            .value { font-size: 24px; font-weight: 700; margin-top: 6px; }
+            table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+            th { background: #f6f6f6; }
+            h2 { margin: 20px 0 8px; font-size: 16px; }
+          </style>
+        </head>
+        <body>
+          <h1>Season ${adminStats.season} ${adminStats.round}회 통계</h1>
+          <p>전체 통계 및 반별 통계 리포트</p>
+          <div class="cards">
+            <div class="card"><div class="label">응시 인원</div><div class="value">${adminStats.participantCount}</div></div>
+            <div class="card"><div class="label">평균 점수</div><div class="value">${adminStats.averageScore}</div></div>
+            <div class="card"><div class="label">최고 점수</div><div class="value">${adminStats.maxScore}</div></div>
+            <div class="card"><div class="label">최저 점수</div><div class="value">${adminStats.minScore}</div></div>
+          </div>
+          <h2>반별 통계</h2>
+          <table>
+            <thead><tr><th>반</th><th>인원</th><th>평균</th><th>최고</th><th>최저</th></tr></thead>
+            <tbody>${classRows}</tbody>
+          </table>
+          <h2>약점 문항(정답률 낮은 순)</h2>
+          <table>
+            <thead><tr><th>문항</th><th>정답</th><th>정답률</th><th>응답수</th></tr></thead>
+            <tbody>${weakRows}</tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -802,7 +955,7 @@ export default function PortalClient({
                       </p>
                     </div>
 
-                    <div className="mx-auto grid w-full max-w-4xl gap-5 md:grid-cols-2">
+                    <div className="mx-auto grid w-full max-w-6xl gap-5 md:grid-cols-3">
                       <button
                         type="button"
                         onClick={() => setAdminStep("search")}
@@ -840,8 +993,29 @@ export default function PortalClient({
                               <ArrowRight className="h-5 w-5 text-white/45 transition-transform duration-200 group-hover:translate-x-1" />
                             </CardTitle>
                             <CardDescription className="text-base text-white/50">
-                              점수 입력 전용 화면은 다음 단계에서 연결할 수 있도록
-                              분리해 두었습니다.
+                              시즌 M/N의 예상 1컷, 2컷, 3컷, 만점 표점 입력 기능으로
+                              연결될 예정입니다.
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setAdminStep("stats")}
+                        className="group text-left"
+                      >
+                        <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
+                          <CardHeader>
+                            <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-300/20">
+                              <BookOpen className="h-6 w-6" />
+                            </div>
+                            <CardTitle className="flex items-center justify-between text-2xl">
+                              통계 뽑기
+                              <ArrowRight className="h-5 w-5 text-white/45 transition-transform duration-200 group-hover:translate-x-1" />
+                            </CardTitle>
+                            <CardDescription className="text-base text-white/50">
+                              시즌/회차별 전체 통계와 반별 통계를 확인하고 PDF로 저장합니다.
                             </CardDescription>
                           </CardHeader>
                         </Card>
@@ -854,22 +1028,177 @@ export default function PortalClient({
                       <CardHeader>
                         <CardTitle className="text-3xl">점수 입력하기</CardTitle>
                         <CardDescription className="text-white/55">
-                          점수 입력 화면은 분리해 두었습니다. 지금은 학생 검색 흐름을
-                          우선 바로 사용할 수 있습니다.
+                          시즌 M/N 관리자 입력 기능은 업데이트 예정입니다.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-6 text-white/70">
-                          다음 단계로 점수 입력 폼과 저장 로직을 여기에 연결하면
-                          됩니다.
+                          추후 입력 예정 항목:
+                          <br />
+                          예상 1컷, 예상 2컷, 예상 3컷, 예상 만점 표준점수
                         </div>
                         <div className="flex flex-wrap gap-3">
                           <Button
-                            className="rounded-2xl bg-white text-black hover:bg-white/90"
-                            onClick={() => setAdminStep("search")}
+                            variant="secondary"
+                            className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                            onClick={() => setAdminStep("home")}
                           >
-                            학생 검색으로 이동
+                            관리자 홈
                           </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : adminStep === "stats" ? (
+                  <div className="mx-auto w-full max-w-6xl space-y-5">
+                    <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                      <CardHeader>
+                        <CardTitle className="text-3xl">통계 뽑기</CardTitle>
+                        <CardDescription className="text-white/55">
+                          시즌/회차를 선택하면 전체 통계, 반별 통계를 확인할 수 있습니다.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        <div className="grid gap-4 sm:grid-cols-3">
+                          <div className="space-y-2">
+                            <Label className="text-white/75">시즌</Label>
+                            <select
+                              value={statsSeason}
+                              onChange={(e) =>
+                                setStatsSeason(e.target.value as "C" | "M" | "N")
+                              }
+                              className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                            >
+                              <option value="C">Season C</option>
+                              <option value="M">Season M</option>
+                              <option value="N">Season N</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-white/75">회차</Label>
+                            <select
+                              value={statsRound}
+                              onChange={(e) => setStatsRound(Number(e.target.value))}
+                              className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                            >
+                              {Array.from({ length: 10 }, (_, i) => i + 1).map((round) => (
+                                <option key={round} value={round}>
+                                  {round}회
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-end">
+                            <Button
+                              className="h-11 rounded-xl bg-white text-black hover:bg-white/90"
+                              onClick={handleDownloadStatsPdf}
+                              disabled={!adminStats || adminStatsLoading}
+                            >
+                              PDF 다운로드
+                            </Button>
+                          </div>
+                        </div>
+
+                        {adminStatsLoading ? (
+                          <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
+                            통계를 불러오는 중...
+                          </div>
+                        ) : adminStatsError ? (
+                          <div className="rounded-[1.5rem] border border-amber-300/30 bg-amber-500/10 p-6 text-amber-100">
+                            {adminStatsError}
+                          </div>
+                        ) : adminStats ? (
+                          <div className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">응시 인원</p>
+                                <p className="mt-2 text-3xl font-semibold">
+                                  {adminStats.participantCount}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">평균 점수</p>
+                                <p className="mt-2 text-3xl font-semibold">
+                                  {adminStats.averageScore}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">최고 점수</p>
+                                <p className="mt-2 text-3xl font-semibold">
+                                  {adminStats.maxScore}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">최저 점수</p>
+                                <p className="mt-2 text-3xl font-semibold">
+                                  {adminStats.minScore}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="grid gap-4 xl:grid-cols-2">
+                              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                                <div className="border-b border-white/10 px-4 py-3 text-sm text-white/55">
+                                  반별 통계
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full min-w-[420px] text-sm">
+                                    <thead className="text-white/55">
+                                      <tr>
+                                        <th className="px-3 py-3 text-left">반</th>
+                                        <th className="px-3 py-3 text-left">인원</th>
+                                        <th className="px-3 py-3 text-left">평균</th>
+                                        <th className="px-3 py-3 text-left">최고</th>
+                                        <th className="px-3 py-3 text-left">최저</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {adminStats.classStats.map((row) => (
+                                        <tr key={row.className} className="border-t border-white/10">
+                                          <td className="px-3 py-3">{row.className}</td>
+                                          <td className="px-3 py-3">{row.count}</td>
+                                          <td className="px-3 py-3">{row.average}</td>
+                                          <td className="px-3 py-3">{row.max}</td>
+                                          <td className="px-3 py-3">{row.min}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+
+                              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                                <div className="border-b border-white/10 px-4 py-3 text-sm text-white/55">
+                                  약점 문항 (정답률 낮은 순)
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full min-w-[420px] text-sm">
+                                    <thead className="text-white/55">
+                                      <tr>
+                                        <th className="px-3 py-3 text-left">문항</th>
+                                        <th className="px-3 py-3 text-left">정답</th>
+                                        <th className="px-3 py-3 text-left">정답률</th>
+                                        <th className="px-3 py-3 text-left">응답수</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {adminStats.weakQuestions.slice(0, 8).map((row) => (
+                                        <tr key={row.question} className="border-t border-white/10">
+                                          <td className="px-3 py-3">{row.question}번</td>
+                                          <td className="px-3 py-3">{row.correctChoice ?? "-"}</td>
+                                          <td className="px-3 py-3">{row.correctRate}%</td>
+                                          <td className="px-3 py-3">{row.answerCount}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="flex gap-3">
                           <Button
                             variant="secondary"
                             className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
@@ -1514,6 +1843,11 @@ export default function PortalClient({
                             <p className="text-xs text-white/50">
                               빨간 줄은 내 오답 문항, 초록색은 정답 번호입니다.
                             </p>
+                            <div className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                              통계/점수 문의는 카카오톡 아이디 `jwlee2670` 또는
+                              `010-3676-2670`으로 연락 주시면 빠르게 확인 후
+                              안내드리겠습니다.
+                            </div>
                           </CardContent>
                         </Card>
                       )}

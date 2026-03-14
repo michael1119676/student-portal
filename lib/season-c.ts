@@ -80,6 +80,23 @@ export type SeasonCViewData = {
   details: SeasonCRoundDetail[];
 };
 
+export type SeasonCAdminStats = {
+  season: "C";
+  round: number;
+  participantCount: number;
+  averageScore: number;
+  maxScore: number;
+  minScore: number;
+  histogram: HistogramBin[];
+  classStats: ClassStat[];
+  weakQuestions: Array<{
+    question: number;
+    correctChoice: number | null;
+    correctRate: number;
+    answerCount: number;
+  }>;
+};
+
 const ANSWER_KEYS: Record<number, number[]> = {
   1: "325454313".split("").map(Number),
   2: "54332241131".split("").map(Number),
@@ -182,7 +199,11 @@ function dedupeLatestRows(rows: RawRoundRow[]) {
   return [...latest.values()];
 }
 
-function buildRoundRows(round: number, rawRound: RawRound, students: StudentRef[]) {
+function buildRoundRows(
+  round: number,
+  rawRound: RawRound,
+  students: StudentRef[]
+) {
   const byName = buildNameToStudentsMap(students);
   const deduped = dedupeLatestRows(rawRound.rows);
   const result: RoundRow[] = [];
@@ -299,7 +320,10 @@ function getRawRound(data: RawSeasonCData, round: number): RawRound {
   );
 }
 
-export function buildSeasonCViewData(students: StudentRef[], targetStudentId: string) {
+export function buildSeasonCViewData(
+  students: StudentRef[],
+  targetStudentId: string
+) {
   const data = seasonCRoundsRaw as RawSeasonCData;
   const rounds: SeasonCRoundSummary[] = [];
   const details: SeasonCRoundDetail[] = [];
@@ -347,4 +371,51 @@ export function buildSeasonCViewData(students: StudentRef[], targetStudentId: st
   }
 
   return { rounds, details };
+}
+
+export function buildSeasonCAdminStats(
+  students: StudentRef[],
+  round: number
+): SeasonCAdminStats {
+  const data = seasonCRoundsRaw as RawSeasonCData;
+  const safeRound = Math.max(1, Math.min(10, Math.round(round)));
+  const rawRound = getRawRound(data, safeRound);
+  const rows = buildRoundRows(safeRound, rawRound, students);
+  const answerKey = ANSWER_KEYS[safeRound] ?? [];
+  const questionCount = Math.max(rawRound.questionCount, answerKey.length);
+  const validScores = rows
+    .map((row) => row.score)
+    .filter((value): value is number => value !== null);
+
+  const questionStats = buildQuestionStats(rows, questionCount, answerKey, []);
+  const weakQuestions = questionStats
+    .map((question) => {
+      const correctChoice = question.correctChoice;
+      const correctItem = question.choices.find(
+        (choice) => choice.choice === correctChoice
+      );
+      const answerCount = question.choices.reduce((acc, cur) => acc + cur.count, 0);
+      return {
+        question: question.question,
+        correctChoice,
+        correctRate: correctItem?.rate ?? 0,
+        answerCount,
+      };
+    })
+    .sort((a, b) => a.correctRate - b.correctRate);
+
+  return {
+    season: "C",
+    round: safeRound,
+    participantCount: validScores.length,
+    averageScore:
+      validScores.length > 0
+        ? toOneDecimal(validScores.reduce((acc, cur) => acc + cur, 0) / validScores.length)
+        : 0,
+    maxScore: validScores.length > 0 ? Math.max(...validScores) : 0,
+    minScore: validScores.length > 0 ? Math.min(...validScores) : 0,
+    histogram: buildHistogram(rows),
+    classStats: buildClassStats(rows),
+    weakQuestions,
+  };
 }
