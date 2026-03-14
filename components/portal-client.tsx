@@ -76,6 +76,8 @@ type SeasonCRoundDetail = {
   classStats: Array<{
     className: string;
     average: number;
+    median: number;
+    stdDev: number;
     max: number;
     min: number;
     count: number;
@@ -123,6 +125,8 @@ type AdminStatsResponse = {
     classStats: Array<{
       className: string;
       average: number;
+      median: number;
+      stdDev: number;
       max: number;
       min: number;
       count: number;
@@ -131,7 +135,6 @@ type AdminStatsResponse = {
       question: number;
       correctChoice: number | null;
       correctRate: number;
-      answerCount: number;
       choiceRates: Array<{
         choice: number;
         rate: number;
@@ -233,13 +236,6 @@ function getTargetUniversity(value?: string | null) {
   return "seoul";
 }
 
-function getVsAverageLabel(value: SeasonCRoundDetail["myVsAverage"]) {
-  if (value === "above") return "평균보다 높음";
-  if (value === "below") return "평균보다 낮음";
-  if (value === "equal") return "평균과 동일";
-  return "내 점수 없음";
-}
-
 export default function PortalClient({
   mode = "student",
   initialSessionUser = null,
@@ -308,20 +304,23 @@ export default function PortalClient({
     return seasonCData.details.find((detail) => detail.round === selectedRound) ?? null;
   }, [seasonCData, selectedRound]);
 
-  const linePoints = useMemo(() => {
-    if (!seasonCData || seasonCData.rounds.length < 2) return "";
+  const myPlotPoints = useMemo(() => {
+    if (!seasonCData || seasonCData.rounds.length === 0) return [];
 
-    const points = seasonCData.rounds
+    return seasonCData.rounds
       .map((round, index, array) => {
         if (round.myScore === null) return null;
         const x = array.length === 1 ? 50 : (index / (array.length - 1)) * 100;
         const y = 100 - round.myScore;
-        return `${x},${y}`;
+        return { x, y };
       })
-      .filter(Boolean);
-
-    return points.join(" ");
+      .filter((point): point is { x: number; y: number } => point !== null);
   }, [seasonCData]);
+
+  const linePoints = useMemo(
+    () => myPlotPoints.map((point) => `${point.x},${point.y}`).join(" "),
+    [myPlotPoints]
+  );
 
   function applyProfile(profileData?: StudentProfile | null) {
     setSelectedKorean(profileData?.korean_subject || "언어와 매체");
@@ -489,7 +488,7 @@ export default function PortalClient({
     const classRows = adminStats.classStats
       .map(
         (row) =>
-          `<tr><td>${row.className}</td><td>${row.count}</td><td>${row.average}</td><td>${row.max}</td><td>${row.min}</td></tr>`
+          `<tr><td>${row.className}</td><td>${row.count}</td><td>${row.average}</td><td>${row.median}</td><td>${row.stdDev}</td><td>${row.max}</td><td>${row.min}</td></tr>`
       )
       .join("");
 
@@ -499,7 +498,7 @@ export default function PortalClient({
         const choiceCell = row.choiceRates
           .map((choice) => `${choice.choice}:${choice.rate}%`)
           .join(" / ");
-        return `<tr><td>${row.question}번</td><td>${row.correctChoice ?? "-"}</td><td>${row.correctRate}%</td><td>${row.answerCount}</td><td>${choiceCell}</td></tr>`;
+        return `<tr><td>${row.question}번</td><td>${row.correctChoice ?? "-"}</td><td>${row.correctRate}%</td><td>${choiceCell}</td></tr>`;
       })
       .join("");
 
@@ -532,12 +531,12 @@ export default function PortalClient({
           </div>
           <h2>반별 통계</h2>
           <table>
-            <thead><tr><th>반</th><th>인원</th><th>평균</th><th>최고</th><th>최저</th></tr></thead>
+            <thead><tr><th>반</th><th>인원</th><th>평균</th><th>중앙값</th><th>표준편차</th><th>최고</th><th>최저</th></tr></thead>
             <tbody>${classRows}</tbody>
           </table>
           <h2>약점 문항(정답률 낮은 순)</h2>
           <table>
-            <thead><tr><th>문항</th><th>정답</th><th>정답률</th><th>응답수</th><th>선택지 선택률</th></tr></thead>
+            <thead><tr><th>문항</th><th>정답</th><th>정답률</th><th>선택지 선택률</th></tr></thead>
             <tbody>${weakRows}</tbody>
           </table>
         </body>
@@ -1155,6 +1154,8 @@ export default function PortalClient({
                                         <th className="px-3 py-3 text-left">반</th>
                                         <th className="px-3 py-3 text-left">인원</th>
                                         <th className="px-3 py-3 text-left">평균</th>
+                                        <th className="px-3 py-3 text-left">중앙값</th>
+                                        <th className="px-3 py-3 text-left">표준편차</th>
                                         <th className="px-3 py-3 text-left">최고</th>
                                         <th className="px-3 py-3 text-left">최저</th>
                                       </tr>
@@ -1165,6 +1166,8 @@ export default function PortalClient({
                                           <td className="px-3 py-3">{row.className}</td>
                                           <td className="px-3 py-3">{row.count}</td>
                                           <td className="px-3 py-3">{row.average}</td>
+                                          <td className="px-3 py-3">{row.median}</td>
+                                          <td className="px-3 py-3">{row.stdDev}</td>
                                           <td className="px-3 py-3">{row.max}</td>
                                           <td className="px-3 py-3">{row.min}</td>
                                         </tr>
@@ -1185,7 +1188,6 @@ export default function PortalClient({
                                         <th className="px-3 py-3 text-left">문항</th>
                                         <th className="px-3 py-3 text-left">정답</th>
                                         <th className="px-3 py-3 text-left">정답률</th>
-                                        <th className="px-3 py-3 text-left">응답수</th>
                                         <th className="px-3 py-3 text-left">1번</th>
                                         <th className="px-3 py-3 text-left">2번</th>
                                         <th className="px-3 py-3 text-left">3번</th>
@@ -1199,7 +1201,6 @@ export default function PortalClient({
                                           <td className="px-3 py-3">{row.question}번</td>
                                           <td className="px-3 py-3">{row.correctChoice ?? "-"}</td>
                                           <td className="px-3 py-3">{row.correctRate}%</td>
-                                          <td className="px-3 py-3">{row.answerCount}</td>
                                           {row.choiceRates.map((choice) => (
                                             <td
                                               key={`${row.question}-${choice.choice}`}
@@ -1653,6 +1654,17 @@ export default function PortalClient({
                                         stroke="#ef4444"
                                         strokeWidth="1.8"
                                       />
+                                      {myPlotPoints.map((point, index) => (
+                                        <circle
+                                          key={`my-point-${index}`}
+                                          cx={point.x}
+                                          cy={point.y}
+                                          r="1.4"
+                                          fill="#ef4444"
+                                          stroke="#fee2e2"
+                                          strokeWidth="0.4"
+                                        />
+                                      ))}
                                     </svg>
                                   )}
 
@@ -1660,8 +1672,6 @@ export default function PortalClient({
                                     {seasonCData.rounds.map((round) => {
                                       const averageHeight = `${round.averageScore}%`;
                                       const isSelected = selectedRound === round.round;
-                                      const myBottom =
-                                        round.myScore === null ? null : `${round.myScore}%`;
 
                                       return (
                                         <button
@@ -1678,12 +1688,6 @@ export default function PortalClient({
                                             }`}
                                             style={{ height: averageHeight }}
                                           />
-                                          {myBottom && (
-                                            <div
-                                              className="absolute left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border border-red-200 bg-red-500"
-                                              style={{ bottom: `calc(${myBottom} + 22px)` }}
-                                            />
-                                          )}
                                           <div className="absolute bottom-0 text-center">
                                             <p className="text-sm font-medium text-white/90">
                                               {round.round}회
@@ -1701,7 +1705,7 @@ export default function PortalClient({
 
                               {!seasonCData.rounds.some((round) => round.myScore !== null) && (
                                 <p className="text-sm text-amber-200/90">
-                                  현재 업로드된 시즌 C 응답에서 본인 데이터가 없어 빨간
+                                  현재 업로드된 C 시즌 응답에서 본인 데이터가 없어 빨간
                                   점은 표시되지 않습니다.
                                 </p>
                               )}
@@ -1726,7 +1730,7 @@ export default function PortalClient({
                             </CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-6">
-                            <div className="grid gap-4 md:grid-cols-3">
+                            <div className="grid gap-4 md:grid-cols-2">
                               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <p className="text-sm text-white/45">내 점수</p>
                                 <p className="mt-2 text-3xl font-semibold text-red-300">
@@ -1737,12 +1741,6 @@ export default function PortalClient({
                                 <p className="text-sm text-white/45">평균 점수</p>
                                 <p className="mt-2 text-3xl font-semibold">
                                   {selectedRoundDetail.averageScore}
-                                </p>
-                              </div>
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                <p className="text-sm text-white/45">비교</p>
-                                <p className="mt-2 text-xl font-semibold text-sky-200">
-                                  {getVsAverageLabel(selectedRoundDetail.myVsAverage)}
                                 </p>
                               </div>
                             </div>
@@ -1785,6 +1783,8 @@ export default function PortalClient({
                                         <th className="px-4 py-3 text-left">반</th>
                                         <th className="px-4 py-3 text-left">인원</th>
                                         <th className="px-4 py-3 text-left">평균</th>
+                                        <th className="px-4 py-3 text-left">중앙값</th>
+                                        <th className="px-4 py-3 text-left">표준편차</th>
                                         <th className="px-4 py-3 text-left">최고</th>
                                         <th className="px-4 py-3 text-left">최저</th>
                                       </tr>
@@ -1795,6 +1795,8 @@ export default function PortalClient({
                                           <td className="px-4 py-3">{row.className}</td>
                                           <td className="px-4 py-3">{row.count}</td>
                                           <td className="px-4 py-3">{row.average}</td>
+                                          <td className="px-4 py-3">{row.median}</td>
+                                          <td className="px-4 py-3">{row.stdDev}</td>
                                           <td className="px-4 py-3">{row.max}</td>
                                           <td className="px-4 py-3">{row.min}</td>
                                         </tr>

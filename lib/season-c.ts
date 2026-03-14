@@ -48,6 +48,8 @@ export type HistogramBin = {
 export type ClassStat = {
   className: string;
   average: number;
+  median: number;
+  stdDev: number;
   max: number;
   min: number;
   count: number;
@@ -93,7 +95,6 @@ export type SeasonCAdminStats = {
     question: number;
     correctChoice: number | null;
     correctRate: number;
-    answerCount: number;
     choiceRates: Array<{
       choice: number;
       rate: number;
@@ -260,13 +261,26 @@ function buildClassStats(rows: RoundRow[]) {
   }
 
   return [...grouped.entries()]
-    .map(([className, scores]) => ({
-      className,
-      average: toOneDecimal(scores.reduce((acc, cur) => acc + cur, 0) / scores.length),
-      max: Math.max(...scores),
-      min: Math.min(...scores),
-      count: scores.length,
-    }))
+    .map(([className, scores]) => {
+      const sorted = [...scores].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const median =
+        sorted.length % 2 === 0
+          ? (sorted[mid - 1] + sorted[mid]) / 2
+          : sorted[mid];
+      const avg = scores.reduce((acc, cur) => acc + cur, 0) / scores.length;
+      const variance =
+        scores.reduce((acc, cur) => acc + (cur - avg) ** 2, 0) / scores.length;
+      return {
+        className,
+        average: toOneDecimal(avg),
+        median: toOneDecimal(median),
+        stdDev: toOneDecimal(Math.sqrt(variance)),
+        max: Math.max(...scores),
+        min: Math.min(...scores),
+        count: scores.length,
+      };
+    })
     .sort((a, b) => a.className.localeCompare(b.className, "ko"));
 }
 
@@ -399,12 +413,10 @@ export function buildSeasonCAdminStats(
       const correctItem = question.choices.find(
         (choice) => choice.choice === correctChoice
       );
-      const answerCount = question.choices.reduce((acc, cur) => acc + cur.count, 0);
       return {
         question: question.question,
         correctChoice,
         correctRate: correctItem?.rate ?? 0,
-        answerCount,
         choiceRates: question.choices.map((choice) => ({
           choice: choice.choice,
           rate: choice.rate,
