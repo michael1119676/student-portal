@@ -11,8 +11,30 @@ function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
+function getMissingEnvVars() {
+  const required = [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SESSION_SECRET",
+  ] as const;
+
+  return required.filter((key) => !process.env[key] || process.env[key]?.trim() === "");
+}
+
 export async function POST(request: Request) {
   try {
+    const missingEnv = getMissingEnvVars();
+    if (missingEnv.length > 0) {
+      console.error("[login] missing environment variables:", missingEnv.join(", "));
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `서버 환경변수 설정 오류: ${missingEnv.join(", ")}`,
+        },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const name = String(body?.name || "").trim();
     const phone = normalizePhone(String(body?.phone || ""));
