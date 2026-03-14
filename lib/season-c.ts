@@ -94,6 +94,11 @@ export type SeasonCAdminStats = {
     correctChoice: number | null;
     correctRate: number;
     answerCount: number;
+    choiceRates: Array<{
+      choice: number;
+      rate: number;
+      count: number;
+    }>;
   }>;
 };
 
@@ -400,6 +405,11 @@ export function buildSeasonCAdminStats(
         correctChoice,
         correctRate: correctItem?.rate ?? 0,
         answerCount,
+        choiceRates: question.choices.map((choice) => ({
+          choice: choice.choice,
+          rate: choice.rate,
+          count: choice.count,
+        })),
       };
     })
     .sort((a, b) => a.correctRate - b.correctRate);

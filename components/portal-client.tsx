@@ -132,6 +132,11 @@ type AdminStatsResponse = {
       correctChoice: number | null;
       correctRate: number;
       answerCount: number;
+      choiceRates: Array<{
+        choice: number;
+        rate: number;
+        count: number;
+      }>;
     }>;
   };
 };
@@ -490,10 +495,12 @@ export default function PortalClient({
 
     const weakRows = adminStats.weakQuestions
       .slice(0, 8)
-      .map(
-        (row) =>
-          `<tr><td>${row.question}번</td><td>${row.correctChoice ?? "-"}</td><td>${row.correctRate}%</td><td>${row.answerCount}</td></tr>`
-      )
+      .map((row) => {
+        const choiceCell = row.choiceRates
+          .map((choice) => `${choice.choice}:${choice.rate}%`)
+          .join(" / ");
+        return `<tr><td>${row.question}번</td><td>${row.correctChoice ?? "-"}</td><td>${row.correctRate}%</td><td>${row.answerCount}</td><td>${choiceCell}</td></tr>`;
+      })
       .join("");
 
     const html = `
@@ -530,7 +537,7 @@ export default function PortalClient({
           </table>
           <h2>약점 문항(정답률 낮은 순)</h2>
           <table>
-            <thead><tr><th>문항</th><th>정답</th><th>정답률</th><th>응답수</th></tr></thead>
+            <thead><tr><th>문항</th><th>정답</th><th>정답률</th><th>응답수</th><th>선택지 선택률</th></tr></thead>
             <tbody>${weakRows}</tbody>
           </table>
         </body>
@@ -1179,6 +1186,11 @@ export default function PortalClient({
                                         <th className="px-3 py-3 text-left">정답</th>
                                         <th className="px-3 py-3 text-left">정답률</th>
                                         <th className="px-3 py-3 text-left">응답수</th>
+                                        <th className="px-3 py-3 text-left">1번</th>
+                                        <th className="px-3 py-3 text-left">2번</th>
+                                        <th className="px-3 py-3 text-left">3번</th>
+                                        <th className="px-3 py-3 text-left">4번</th>
+                                        <th className="px-3 py-3 text-left">5번</th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -1188,6 +1200,18 @@ export default function PortalClient({
                                           <td className="px-3 py-3">{row.correctChoice ?? "-"}</td>
                                           <td className="px-3 py-3">{row.correctRate}%</td>
                                           <td className="px-3 py-3">{row.answerCount}</td>
+                                          {row.choiceRates.map((choice) => (
+                                            <td
+                                              key={`${row.question}-${choice.choice}`}
+                                              className={`px-3 py-3 ${
+                                                choice.choice === row.correctChoice
+                                                  ? "font-semibold text-emerald-300"
+                                                  : ""
+                                              }`}
+                                            >
+                                              {choice.rate}%
+                                            </td>
+                                          ))}
                                         </tr>
                                       ))}
                                     </tbody>
