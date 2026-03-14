@@ -890,9 +890,9 @@ export default function PortalClient({
 
                       {loginFailCount >= 5 && (
                         <div className="rounded-2xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                          로그인 5번 실패 시 비밀번호 초기화 및 로그인 문의는 카카오톡
-                          아이디 `jwlee2670` 또는 `010-3676-2670`으로 연락 주시면
-                          빠르게 조치 후 연락드리겠습니다.
+                          비밀번호 초기화 및 로그인 문의는 카카오톡 아이디
+                          `jwlee2670` 또는 `010-3676-2670`으로 연락 주시면 빠르게
+                          조치 후 연락드리겠습니다.
                         </div>
                       )}
 
