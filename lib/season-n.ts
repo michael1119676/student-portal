@@ -60,6 +60,9 @@ export type SeasonNRoundDetail = {
   }>;
   questionStats: Array<{
     question: number;
+    correctChoice: number | null;
+    myChoice: number | null;
+    isWrong: boolean;
     choices: Array<{
       choice: number;
       count: number;
@@ -74,6 +77,13 @@ export type SeasonNViewData = {
 };
 
 const ROUND_COUNT = 12;
+const ANSWER_KEYS: Record<number, number[]> = {};
+
+function normalizeDisplayClassName(value: string) {
+  const normalized = String(value || "").trim();
+  if (normalized === "영상반") return "녹화강의반";
+  return normalized || "미분류";
+}
 
 function toOneDecimal(value: number) {
   return Math.round(value * 10) / 10;
@@ -152,7 +162,7 @@ function buildRoundRows(round: number, rawRound: RawRound, students: StudentRef[
 
     rows.push({
       studentId: matched.id,
-      className: row.className || matched.class_name || "미분류",
+      className: normalizeDisplayClassName(row.className || matched.class_name || "미분류"),
       score: normalizeScore(row.score),
       answers: row.answers.map((choice) => normalizeChoice(choice)),
     });
@@ -209,7 +219,12 @@ function buildClassStats(rows: RoundRow[]) {
     .sort((a, b) => a.className.localeCompare(b.className, "ko"));
 }
 
-function buildQuestionStats(rows: RoundRow[], questionCount: number) {
+function buildQuestionStats(
+  rows: RoundRow[],
+  questionCount: number,
+  answerKey: number[],
+  myAnswers: Array<number | null>
+) {
   const result: SeasonNRoundDetail["questionStats"] = [];
 
   for (let i = 0; i < questionCount; i += 1) {
@@ -229,8 +244,15 @@ function buildQuestionStats(rows: RoundRow[], questionCount: number) {
       total += 1;
     }
 
+    const correctChoice = normalizeChoice(answerKey[i]);
+    const myChoice = normalizeChoice(myAnswers[i]);
+
     result.push({
       question: i + 1,
+      correctChoice,
+      myChoice,
+      isWrong:
+        myChoice !== null && correctChoice !== null && myChoice !== correctChoice,
       choices: [1, 2, 3, 4, 5].map((choice) => {
         const count = counts.get(choice) ?? 0;
         return {
@@ -271,6 +293,9 @@ export function buildSeasonNViewData(
 
     const myRow = rows.find((row) => row.studentId === targetStudentId) ?? null;
     const myScore = myRow?.score ?? null;
+    const myAnswers = myRow?.answers ?? [];
+    const answerKey = ANSWER_KEYS[round] ?? [];
+    const questionCount = Math.max(rawRound.questionCount, answerKey.length);
     const myStdScore = computeStdScore(myScore, rawAverageScore);
     const cutoff = cutoffsByRound[round] ?? { cut1: null, cut2: null, cut3: null };
 
@@ -290,7 +315,7 @@ export function buildSeasonNViewData(
       cut3: cutoff.cut3,
       histogram: buildHistogram(rows),
       classStats: buildClassStats(rows),
-      questionStats: buildQuestionStats(rows, rawRound.questionCount),
+      questionStats: buildQuestionStats(rows, questionCount, answerKey, myAnswers),
     });
   }
 
