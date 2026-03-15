@@ -99,6 +99,53 @@ type WeeklyWinner = {
 };
 
 type AdminPanelTab = "inventory" | "studentLogs" | "weeklyLogs" | "coinAdjust";
+type DrawCinematicPhase = "waiting" | "opening" | "result";
+
+type DrawResult = {
+  drawLogId: number;
+  boxCode: string;
+  productName: string;
+  coinBefore: number;
+  coinAfter: number;
+  remainingQuantity: number | null;
+  isRare: boolean;
+};
+
+type DrawRequestResult =
+  | {
+      ok: true;
+      message: string;
+      result: DrawResult;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
+const BOX_VIDEO_ASSETS: Record<
+  string,
+  {
+    waiting: string;
+    opening: string;
+  }
+> = {
+  bronze: {
+    waiting: "/shop-videos/bronze-wait.mp4",
+    opening: "/shop-videos/bronze-open.mp4",
+  },
+  silver: {
+    waiting: "/shop-videos/silver-wait.mp4",
+    opening: "/shop-videos/silver-open.mp4",
+  },
+  gold: {
+    waiting: "/shop-videos/gold-wait.mp4",
+    opening: "/shop-videos/gold-open.mp4",
+  },
+  diamond: {
+    waiting: "/shop-videos/diamond-wait.mp4",
+    opening: "/shop-videos/diamond-open.mp4",
+  },
+};
 
 function formatKst(value: string | null | undefined) {
   if (!value) return "-";
@@ -131,9 +178,17 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [openingBox, setOpeningBox] = useState<string | null>(null);
+  const [drawCinematic, setDrawCinematic] = useState<{
+    boxCode: string;
+    phase: DrawCinematicPhase;
+    resolvingResult: boolean;
+  } | null>(null);
+  const [drawResult, setDrawResult] = useState<DrawResult | null>(null);
   const [rareToast, setRareToast] = useState<string>("");
   const [rareToastVisible, setRareToastVisible] = useState(false);
   const lastFeedIdRef = useRef(0);
+  const drawRequestRef = useRef<Promise<DrawRequestResult> | null>(null);
+  const drawCloseTimerRef = useRef<number | null>(null);
   const [adminTab, setAdminTab] = useState<AdminPanelTab>("inventory");
   const [students, setStudents] = useState<AdminStudent[]>([]);
   const [studentQuery, setStudentQuery] = useState("");
@@ -167,6 +222,14 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     () => inventoryBoxes.find((box) => box.code === inventoryBoxCode) ?? null,
     [inventoryBoxes, inventoryBoxCode]
   );
+
+  const boxNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const box of boxes) {
+      map[box.code] = box.name;
+    }
+    return map;
+  }, [boxes]);
 
   const tickerText = useMemo(() => {
     if (feed.length === 0) return "아직 당첨 기록이 없습니다.";
@@ -341,10 +404,16 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     return () => window.clearTimeout(t);
   }, [rareToastVisible]);
 
-  const handleDraw = async (boxCode: string) => {
-    setMessage("");
-    setOpeningBox(boxCode);
+  useEffect(
+    () => () => {
+      if (drawCloseTimerRef.current) {
+        window.clearTimeout(drawCloseTimerRef.current);
+      }
+    },
+    []
+  );
 
+  const requestDraw = async (boxCode: string): Promise<DrawRequestResult> => {
     try {
       const res = await fetch("/api/shop/draw", {
         method: "POST",
@@ -353,29 +422,140 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setMessage(data.message || "상자 열기에 실패했습니다.");
-        return;
+        return {
+          ok: false,
+          message: data.message || "상자 열기에 실패했습니다.",
+        };
       }
-
-      const result = data.result;
-      setMessage(
-        `${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨! (코인 ${result.coinBefore} → ${result.coinAfter})`
-      );
-      if (result.isRare) {
-        setRareToast(
-          `${initialUser.name[0] || "익"}XX 학생 ${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨!`
-        );
-        setRareToastVisible(true);
-      }
-      await fetchOverview();
-      await fetchMyLogs();
-      if (isAdmin) {
-        await fetchInventory(inventoryBoxCode);
-      }
+      return {
+        ok: true,
+        message: data.message || "상자 열기에 성공했습니다.",
+        result: data.result as DrawResult,
+      };
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "상자 열기에 실패했습니다.");
-    } finally {
-      window.setTimeout(() => setOpeningBox(null), 600);
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "상자 열기에 실패했습니다.",
+      };
+    }
+  };
+
+  const closeCinematic = () => {
+    if (drawCloseTimerRef.current) {
+      window.clearTimeout(drawCloseTimerRef.current);
+      drawCloseTimerRef.current = null;
+    }
+    drawRequestRef.current = null;
+    setDrawCinematic(null);
+    setDrawResult(null);
+    setOpeningBox(null);
+  };
+
+  const handleDraw = (boxCode: string) => {
+    if (openingBox) return;
+    if (drawCloseTimerRef.current) {
+      window.clearTimeout(drawCloseTimerRef.current);
+      drawCloseTimerRef.current = null;
+    }
+    setMessage("");
+    setOpeningBox(boxCode);
+    setDrawResult(null);
+    setDrawCinematic({
+      boxCode,
+      phase: "waiting",
+      resolvingResult: false,
+    });
+    drawRequestRef.current = requestDraw(boxCode);
+  };
+
+  const handleCinematicVideoEnded = async () => {
+    if (!drawCinematic) return;
+
+    if (drawCinematic.phase === "waiting") {
+      setDrawCinematic((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "opening",
+            }
+          : prev
+      );
+      return;
+    }
+
+    if (drawCinematic.phase !== "opening") {
+      return;
+    }
+
+    setDrawCinematic((prev) => (prev ? { ...prev, resolvingResult: true } : prev));
+    const response = await (drawRequestRef.current ??
+      Promise.resolve<DrawRequestResult>({
+        ok: false,
+        message: "상자 결과를 확인하지 못했습니다. 다시 시도해 주세요.",
+      }));
+    drawRequestRef.current = null;
+
+    if (!response.ok) {
+      closeCinematic();
+      setMessage(response.message || "상자 열기에 실패했습니다.");
+      return;
+    }
+
+    const result = response.result;
+    setDrawResult(result);
+    setDrawCinematic({
+      boxCode: result.boxCode,
+      phase: "result",
+      resolvingResult: false,
+    });
+    setMessage(
+      `${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨! (코인 ${result.coinBefore} → ${result.coinAfter})`
+    );
+
+    if (result.isRare) {
+      setRareToast(
+        `${initialUser.name[0] || "익"}XX 학생 ${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨!`
+      );
+      setRareToastVisible(true);
+    }
+
+    void (async () => {
+      try {
+        await fetchOverview();
+        await fetchMyLogs();
+        if (isAdmin) {
+          await fetchInventory(inventoryBoxCode);
+        }
+      } catch (error) {
+        setMessage((prev) =>
+          prev || (error instanceof Error ? error.message : "상점 정보를 새로고침하지 못했습니다.")
+        );
+      }
+    })();
+
+    drawCloseTimerRef.current = window.setTimeout(() => {
+      setDrawCinematic(null);
+      setDrawResult(null);
+      setOpeningBox(null);
+      drawCloseTimerRef.current = null;
+    }, 2800);
+  };
+
+  const handleCinematicVideoError = () => {
+    if (!drawCinematic) return;
+    if (drawCinematic.phase === "waiting") {
+      setDrawCinematic((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "opening",
+            }
+          : prev
+      );
+      return;
+    }
+    if (drawCinematic.phase === "opening") {
+      void handleCinematicVideoEnded();
     }
   };
 
@@ -510,6 +690,16 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
   };
 
+  const cinematicBoxName = drawCinematic
+    ? boxNameMap[drawCinematic.boxCode] ?? `${drawCinematic.boxCode.toUpperCase()} 상자`
+    : "";
+  const cinematicVideoSrc =
+    drawCinematic && drawCinematic.phase !== "result"
+      ? BOX_VIDEO_ASSETS[drawCinematic.boxCode]?.[
+          drawCinematic.phase === "waiting" ? "waiting" : "opening"
+        ] ?? null
+      : null;
+
   return (
     <main className="min-h-screen bg-[#04070d] px-4 py-8 text-white sm:px-8">
       <div
@@ -524,6 +714,64 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
         <div className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
           <div className="rounded-2xl border border-rose-300/40 bg-rose-500/20 px-5 py-3 text-sm font-medium text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.25)]">
             {rareToast}
+          </div>
+        </div>
+      )}
+
+      {drawCinematic && (
+        <div className="fixed inset-0 z-[70]">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative z-[71] mx-auto flex h-full w-full max-w-5xl items-center justify-center px-4">
+            {drawCinematic.phase !== "result" ? (
+              <div className="w-full overflow-hidden rounded-[2rem] border border-white/20 bg-black/70 shadow-[0_30px_100px_rgba(0,0,0,0.6)]">
+                <div className="border-b border-white/10 px-6 py-4">
+                  <p className="text-xs uppercase tracking-[0.22em] text-amber-200/80">{cinematicBoxName}</p>
+                  <p className="mt-1 text-base font-medium text-white">
+                    {drawCinematic.phase === "waiting" ? "상자 소환 중..." : "상자 개봉 중..."}
+                  </p>
+                </div>
+                {cinematicVideoSrc ? (
+                  <video
+                    key={`${drawCinematic.boxCode}-${drawCinematic.phase}`}
+                    src={cinematicVideoSrc}
+                    autoPlay
+                    playsInline
+                    preload="auto"
+                    className="max-h-[70vh] w-full bg-black object-contain"
+                    onEnded={() => void handleCinematicVideoEnded()}
+                    onError={handleCinematicVideoError}
+                  />
+                ) : (
+                  <div className="flex h-[56vh] items-center justify-center bg-black/70 text-white/70">
+                    영상을 불러오는 중...
+                  </div>
+                )}
+                {drawCinematic.resolvingResult && (
+                  <div className="border-t border-white/10 px-6 py-3 text-center text-sm text-white/70">
+                    당첨 결과를 확인하고 있습니다...
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="w-full max-w-xl rounded-[2rem] border border-amber-200/40 bg-gradient-to-b from-black/90 via-[#121726] to-black/90 px-8 py-10 text-center shadow-[0_25px_120px_rgba(250,204,21,0.18)]">
+                <p className="text-xs uppercase tracking-[0.26em] text-amber-200/85">{cinematicBoxName}</p>
+                <p className="mt-3 text-sm text-white/70">당첨 상품</p>
+                <p className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  {drawResult?.productName ?? "-"}
+                </p>
+                <p className="mt-5 text-sm text-amber-100/90">
+                  코인 {drawResult?.coinBefore ?? 0} → {drawResult?.coinAfter ?? 0}
+                </p>
+                <div className="mt-7">
+                  <Button
+                    className="rounded-2xl bg-amber-300 px-6 text-black hover:bg-amber-200"
+                    onClick={closeCinematic}
+                  >
+                    확인
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -601,7 +849,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     <CardDescription className="text-white/55">
                       {isAdmin
                         ? `남은 재고 ${box.remainingCount ?? "-"}개 · 상품 ${box.productCount ?? "-"}종`
-                        : "재고 정보는 관리자 계정에서만 확인할 수 있습니다."}
+                        : "코인으로 상자를 열고 랜덤 상품을 획득할 수 있습니다."}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
