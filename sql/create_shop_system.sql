@@ -42,6 +42,16 @@ create table if not exists public.box_inventory (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.student_box_tickets (
+  id bigserial primary key,
+  student_id uuid not null references public.students(id) on delete cascade,
+  box_code text not null check (box_code in ('bronze', 'silver', 'gold', 'diamond')),
+  remaining_count integer not null default 0 check (remaining_count >= 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (student_id, box_code)
+);
+
 create table if not exists public.draw_logs (
   id bigserial primary key,
   student_id uuid not null references public.students(id) on delete cascade,
@@ -122,6 +132,7 @@ create index if not exists idx_draw_logs_student_id on public.draw_logs (student
 create index if not exists idx_coin_ledger_student_id on public.coin_ledger (student_id, created_at desc);
 create index if not exists idx_admin_action_logs_created_at on public.admin_action_logs (created_at desc);
 create index if not exists idx_admin_action_logs_target_student_id on public.admin_action_logs (target_student_id, created_at desc);
+create index if not exists idx_student_box_tickets_student_id on public.student_box_tickets (student_id, box_code);
 
 create or replace function public.shop_draw_box(
   p_student_id uuid,
@@ -159,6 +170,15 @@ declare
   v_reason text;
   v_reward_delta integer := 0;
   v_reward_multiplier numeric(10, 4) := 1.0;
+  v_used_ticket boolean := false;
+  v_ticket_before integer := 0;
+  v_ticket_after integer := 0;
+  v_grant_ticket_box_code text;
+  v_grant_ticket_count integer := 0;
+  v_grant_ticket_box_name text;
+  v_coin_delta_match text[];
+  v_coin_multiplier_match text[];
+  v_ticket_match text[];
 begin
   select *
   into v_box
@@ -184,9 +204,34 @@ begin
   end if;
 
   v_coin_before := coalesce(v_student.coin_balance, 0);
-  if v_coin_before < v_box.coin_cost then
-    return query select false, '코인이 부족합니다.', null::bigint, v_box.code, null::text, v_coin_before, v_coin_before, null::integer, false;
-    return;
+
+  insert into public.student_box_tickets (student_id, box_code, remaining_count)
+  values (p_student_id, v_box.code, 0)
+  on conflict (student_id, box_code) do nothing;
+
+  select remaining_count
+  into v_ticket_before
+  from public.student_box_tickets
+  where student_id = p_student_id
+    and box_code = v_box.code
+  for update;
+
+  v_ticket_before := coalesce(v_ticket_before, 0);
+  if v_ticket_before > 0 then
+    v_used_ticket := true;
+    update public.student_box_tickets
+    set
+      remaining_count = greatest(remaining_count - 1, 0),
+      updated_at = now()
+    where student_id = p_student_id
+      and box_code = v_box.code
+    returning remaining_count into v_ticket_after;
+  else
+    if v_coin_before < v_box.coin_cost then
+      return query select false, '코인이 부족합니다.', null::bigint, v_box.code, null::text, v_coin_before, v_coin_before, null::integer, false;
+      return;
+    end if;
+    v_ticket_after := v_ticket_before;
   end if;
 
   with candidates as (
@@ -304,10 +349,63 @@ begin
   v_reward_delta := coalesce(v_selected.reward_coin_delta, 0);
   v_reward_multiplier := greatest(coalesce(v_selected.reward_coin_multiplier, 1.0), 0.0001);
 
-  v_coin_after := v_coin_before - v_box.coin_cost;
+  if v_reward_delta = 0 then
+    v_coin_delta_match := regexp_match(v_selected.product_name, '코인\s*([0-9]+)\s*개\s*추가');
+    if v_coin_delta_match is not null and array_length(v_coin_delta_match, 1) >= 1 then
+      v_reward_delta := greatest(coalesce(v_coin_delta_match[1]::integer, 0), 0);
+    end if;
+  end if;
+
+  if v_reward_multiplier = 1.0 then
+    v_coin_multiplier_match := regexp_match(
+      v_selected.product_name,
+      '코인(?:\s*개수)?\s*([0-9]+(?:\.[0-9]+)?)\s*배(?:\s*뽑기권)?'
+    );
+    if v_coin_multiplier_match is not null and array_length(v_coin_multiplier_match, 1) >= 1 then
+      v_reward_multiplier := greatest(coalesce(v_coin_multiplier_match[1]::numeric, 1.0), 0.0001);
+    end if;
+  end if;
+
+  if v_used_ticket then
+    v_coin_after := v_coin_before;
+  else
+    v_coin_after := v_coin_before - v_box.coin_cost;
+  end if;
   v_coin_after := floor(v_coin_after * v_reward_multiplier) + v_reward_delta;
   if v_coin_after < 0 then
     v_coin_after := 0;
+  end if;
+
+  v_ticket_match := regexp_match(v_selected.product_name, '(브론즈|실버|골드|다이아)\s*상자\s*([0-9]+)\s*회');
+  if v_ticket_match is not null and array_length(v_ticket_match, 1) >= 2 then
+    v_grant_ticket_box_code := case v_ticket_match[1]
+      when '브론즈' then 'bronze'
+      when '실버' then 'silver'
+      when '골드' then 'gold'
+      when '다이아' then 'diamond'
+      else null
+    end;
+    v_grant_ticket_count := greatest(coalesce(v_ticket_match[2]::integer, 0), 0);
+
+    if v_grant_ticket_box_code is not null and v_grant_ticket_count > 0 then
+      insert into public.student_box_tickets (
+        student_id,
+        box_code,
+        remaining_count,
+        updated_at
+      )
+      values (
+        p_student_id,
+        v_grant_ticket_box_code,
+        v_grant_ticket_count,
+        now()
+      )
+      on conflict (student_id, box_code)
+      do update
+      set
+        remaining_count = public.student_box_tickets.remaining_count + excluded.remaining_count,
+        updated_at = now();
+    end if;
   end if;
 
   update public.students
@@ -354,8 +452,21 @@ begin
 
   v_delta := v_coin_after - v_coin_before;
   v_reason := format('%s 상자 사용', v_box.name);
+  if v_used_ticket then
+    v_reason := format('%s (무료 뽑기권 사용)', v_reason);
+  end if;
   if v_reward_delta <> 0 or v_reward_multiplier <> 1.0 then
     v_reason := format('%s (보상 반영)', v_reason);
+  end if;
+  if v_grant_ticket_box_code is not null and v_grant_ticket_count > 0 then
+    v_grant_ticket_box_name := case v_grant_ticket_box_code
+      when 'bronze' then '브론즈'
+      when 'silver' then '실버'
+      when 'gold' then '골드'
+      when 'diamond' then '다이아'
+      else v_grant_ticket_box_code
+    end;
+    v_reason := format('%s (%s 상자 %s회 뽑기권 지급)', v_reason, v_grant_ticket_box_name, v_grant_ticket_count);
   end if;
 
   insert into public.coin_ledger (
@@ -392,7 +503,11 @@ begin
   return query
     select
       true,
-      '당첨되었습니다.',
+      case
+        when v_grant_ticket_box_code is not null and v_grant_ticket_count > 0
+          then format('%s 상자 %s회 뽑기권이 지급되었습니다.', coalesce(v_grant_ticket_box_name, '추가'), v_grant_ticket_count)
+        else '당첨되었습니다.'
+      end,
       v_draw_id,
       v_box.code,
       v_selected.product_name::text,
@@ -778,6 +893,7 @@ execute function public.shop_grant_coin_on_new_score();
 alter table public.shop_boxes enable row level security;
 alter table public.shop_products enable row level security;
 alter table public.box_inventory enable row level security;
+alter table public.student_box_tickets enable row level security;
 alter table public.draw_logs enable row level security;
 alter table public.coin_ledger enable row level security;
 alter table public.admin_action_logs enable row level security;
@@ -786,6 +902,7 @@ alter table public.exam_score_records enable row level security;
 revoke all on public.shop_boxes from anon, authenticated;
 revoke all on public.shop_products from anon, authenticated;
 revoke all on public.box_inventory from anon, authenticated;
+revoke all on public.student_box_tickets from anon, authenticated;
 revoke all on public.draw_logs from anon, authenticated;
 revoke all on public.coin_ledger from anon, authenticated;
 revoke all on public.admin_action_logs from anon, authenticated;

@@ -114,6 +114,23 @@ export async function GET() {
     remainingByProduct.set(row.product_id, Number(row.remaining_quantity ?? 0));
   }
 
+  const { data: ticketRows, error: ticketError } = await supabase
+    .from("student_box_tickets")
+    .select("box_code, remaining_count")
+    .eq("student_id", user.id);
+
+  if (ticketError && !ticketError.message.includes("student_box_tickets")) {
+    return NextResponse.json(
+      { ok: false, message: "무료 뽑기권 정보를 불러오지 못했습니다." },
+      { status: 500 }
+    );
+  }
+
+  const ticketCountByBox = new Map<string, number>();
+  for (const row of ticketRows ?? []) {
+    ticketCountByBox.set(String(row.box_code), Number(row.remaining_count ?? 0));
+  }
+
   const boxSummaries = safeBoxes.map((box) => {
     const activeProducts = products.filter(
       (product) => product.box_id === box.id && product.is_active
@@ -128,6 +145,7 @@ export async function GET() {
       coinCost: Number(box.coin_cost ?? 0),
       remainingCount: user.role === "admin" ? remaining : null,
       productCount: user.role === "admin" ? activeProducts.length : null,
+      ticketCount: Number(ticketCountByBox.get(box.code) ?? 0),
     };
   });
 

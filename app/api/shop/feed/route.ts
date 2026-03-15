@@ -13,6 +13,9 @@ export async function GET(request: Request) {
   const rareOnly = url.searchParams.get("rareOnly") === "1";
   const afterIdRaw = Number(url.searchParams.get("afterId") || 0);
   const afterId = Number.isFinite(afterIdRaw) ? Math.max(0, Math.round(afterIdRaw)) : 0;
+  const fromRaw = String(url.searchParams.get("from") || "").trim();
+  const fromDate = fromRaw ? new Date(fromRaw) : null;
+  const hasFromDate = !!fromDate && !Number.isNaN(fromDate.getTime());
 
   const supabase = createAdminClient();
 
@@ -27,6 +30,9 @@ export async function GET(request: Request) {
   }
   if (afterId > 0) {
     query = query.gt("id", afterId);
+  }
+  if (hasFromDate && fromDate) {
+    query = query.gte("created_at", fromDate.toISOString());
   }
 
   const { data, error } = await query;
@@ -49,4 +55,3 @@ export async function GET(request: Request) {
     })),
   });
 }
-

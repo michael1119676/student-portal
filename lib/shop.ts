@@ -92,7 +92,9 @@ function parseRewardCoinDelta(productName: string) {
 }
 
 function parseRewardCoinMultiplier(productName: string) {
-  const match = productName.match(/코인\s*개수\s*([0-9]+)\s*배/i);
+  const match =
+    productName.match(/코인\s*개수\s*([0-9]+(?:\.[0-9]+)?)\s*배/i) ??
+    productName.match(/코인\s*([0-9]+(?:\.[0-9]+)?)\s*배(?:\s*뽑기권)?/i);
   if (!match) return 1;
   const value = Number(match[1]);
   if (!Number.isFinite(value) || value <= 0) return 1;
@@ -163,3 +165,18 @@ export function getNSeasonWeekRange(week: number) {
   };
 }
 
+export function getCurrentNSeasonWeekByDate(now = new Date()) {
+  const baseUtcMs = Date.UTC(2026, 2, 13, 15, 0, 0); // 2026-03-14 00:00 KST
+  const diffMs = now.getTime() - baseUtcMs;
+  if (diffMs < 0) return null;
+  const week = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
+  if (week < 1 || week > 12) return null;
+  return week;
+}
+
+export function getRareBannerWindowStartUtc(now = new Date()) {
+  const currentWeek = getCurrentNSeasonWeekByDate(now);
+  if (!currentWeek) return null;
+  const resetWeek = currentWeek % 2 === 0 ? currentWeek : Math.max(1, currentWeek - 1);
+  return getNSeasonWeekRange(resetWeek).startUtc;
+}

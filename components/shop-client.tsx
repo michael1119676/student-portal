@@ -15,6 +15,7 @@ type ShopBox = {
   coinCost: number;
   remainingCount: number | null;
   productCount: number | null;
+  ticketCount?: number;
 };
 
 type FeedItem = {
@@ -184,8 +185,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     resolvingResult: boolean;
   } | null>(null);
   const [drawResult, setDrawResult] = useState<DrawResult | null>(null);
-  const [rareToast, setRareToast] = useState<string>("");
-  const [rareToastVisible, setRareToastVisible] = useState(false);
   const lastFeedIdRef = useRef(0);
   const drawRequestRef = useRef<Promise<DrawRequestResult> | null>(null);
   const drawCloseTimerRef = useRef<number | null>(null);
@@ -250,12 +249,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     setFeed((data.recentFeed ?? []) as FeedItem[]);
     const latestId = Math.max(0, ...(data.recentFeed ?? []).map((item: FeedItem) => item.id));
     lastFeedIdRef.current = Math.max(lastFeedIdRef.current, latestId);
-    if (data.rareTop?.id && data.rareTop.id > lastFeedIdRef.current) {
-      setRareToast(
-        `${data.rareTop.maskedName} 학생 ${String(data.rareTop.boxCode).toUpperCase()} 상자에서 [${data.rareTop.productName}] 당첨!`
-      );
-      setRareToastVisible(true);
-    }
   };
 
   const fetchMyLogs = async () => {
@@ -386,14 +379,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             .sort((a, b) => b.id - a.id)
             .slice(0, 25);
         });
-
-        const rare = items.find((item) => item.isRare);
-        if (rare) {
-          setRareToast(
-            `${rare.maskedName} 학생 ${rare.boxCode.toUpperCase()} 상자에서 [${rare.productName}] 당첨!`
-          );
-          setRareToastVisible(true);
-        }
       } catch {
         //
       }
@@ -403,12 +388,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       window.clearInterval(timer);
     };
   }, []);
-
-  useEffect(() => {
-    if (!rareToastVisible) return;
-    const t = window.setTimeout(() => setRareToastVisible(false), 6000);
-    return () => window.clearTimeout(t);
-  }, [rareToastVisible]);
 
   useEffect(
     () => () => {
@@ -506,13 +485,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       `${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨! (코인 ${result.coinBefore} → ${result.coinAfter})`
     );
 
-    if (result.isRare) {
-      setRareToast(
-        `${initialUser.name[0] || "익"}XX 학생 ${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨!`
-      );
-      setRareToastVisible(true);
-    }
-
     void (async () => {
       try {
         await fetchOverview();
@@ -532,7 +504,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       setDrawResult(null);
       setOpeningBox(null);
       drawCloseTimerRef.current = null;
-    }, 2800);
+    }, 10000);
   };
 
   const handleCinematicVideoError = () => {
@@ -691,14 +663,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
         }}
       />
 
-      {rareToastVisible && (
-        <div className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-          <div className="rounded-2xl border border-rose-300/40 bg-rose-500/20 px-5 py-3 text-sm font-medium text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.25)]">
-            {rareToast}
-          </div>
-        </div>
-      )}
-
       {drawCinematic && (
         <div className="fixed inset-0 z-[70]">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
@@ -810,7 +774,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             {boxes.map((box) => {
               const isOpening = openingBox === box.code;
               const soldOut = box.remainingCount === 0;
-              const canOpen = coinBalance >= box.coinCost && !soldOut && !isOpening;
+              const hasTicket = Number(box.ticketCount ?? 0) > 0;
+              const canOpen = (hasTicket || coinBalance >= box.coinCost) && !soldOut && !isOpening;
               const waitingVideoSrc = BOX_VIDEO_ASSETS[box.code]?.waiting ?? null;
               return (
                 <Card
@@ -829,7 +794,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     <CardDescription className="text-white/55">
                       {isAdmin
                         ? `남은 재고 ${box.remainingCount ?? "-"}개 · 상품 ${box.productCount ?? "-"}종`
-                        : "코인으로 상자를 열고 랜덤 상품을 획득할 수 있습니다."}
+                        : `코인으로 상자를 열고 랜덤 상품을 획득할 수 있습니다.${hasTicket ? ` 무료권 ${box.ticketCount}장 보유` : ""}`}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -866,10 +831,12 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     >
                       {soldOut
                         ? "재고 소진"
-                        : coinBalance < box.coinCost
+                        : !hasTicket && coinBalance < box.coinCost
                           ? "코인 부족"
-                          : isOpening
-                            ? "오픈 중..."
+                        : isOpening
+                          ? "오픈 중..."
+                          : hasTicket
+                            ? `무료권 사용 열기 (${box.ticketCount})`
                             : "상자 열기"}
                     </Button>
                   </CardContent>
