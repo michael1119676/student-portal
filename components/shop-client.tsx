@@ -779,9 +779,11 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-amber-200/80">Probability Notice</p>
                 <h2 className="mt-1 text-2xl font-semibold text-white">상자별 상품 확률 고지표</h2>
-                <p className="mt-1 text-xs text-white/55">
-                  초기 확률은 상점 기준값이며, 실제 추첨은 비복원(남은 재고) 기준으로 진행됩니다.
-                </p>
+                {isAdmin && (
+                  <p className="mt-1 text-xs text-white/55">
+                    초기 확률은 상점 기준값이며, 실제 추첨은 비복원(남은 재고) 기준으로 진행됩니다.
+                  </p>
+                )}
               </div>
               <Button
                 variant="secondary"
