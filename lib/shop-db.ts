@@ -1,4 +1,4 @@
-import { loadShopCatalogFromExcel, ShopBoxCode } from "@/lib/shop";
+import { loadShopCatalogDefaults, ShopBoxCode } from "@/lib/shop";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type SupabaseClientLike = ReturnType<typeof createAdminClient>;
@@ -16,12 +16,12 @@ export async function isShopSchemaReady(supabase: SupabaseClientLike) {
   return !error;
 }
 
-export async function syncShopCatalogFromExcel(
+export async function syncShopCatalogFromDefaults(
   supabase: SupabaseClientLike,
   options: SyncOptions = {}
 ) {
   const { resetRemaining = false, adminId = null } = options;
-  const catalog = loadShopCatalogFromExcel();
+  const catalog = loadShopCatalogDefaults();
   const now = new Date().toISOString();
 
   const boxRows = catalog.boxes.map((box) => ({
@@ -155,7 +155,7 @@ export async function syncShopCatalogFromExcel(
     throw new Error(`재고 동기화 실패: ${inventoryUpsertError.message}`);
   }
 
-  const productKeysFromExcel = new Set(
+  const productKeysFromDefaults = new Set(
     catalog.products
       .map((product) => {
         const boxId = boxIdMap.get(product.boxCode);
@@ -166,7 +166,7 @@ export async function syncShopCatalogFromExcel(
   );
 
   const staleProductIds = allProducts
-    .filter((row) => !productKeysFromExcel.has(`${row.box_id}::${row.name}`))
+    .filter((row) => !productKeysFromDefaults.has(`${row.box_id}::${row.name}`))
     .map((row) => row.id);
 
   if (staleProductIds.length > 0) {
@@ -178,13 +178,13 @@ export async function syncShopCatalogFromExcel(
 
   await supabase.from("admin_action_logs").insert({
     admin_id: adminId,
-    action_type: "excel_sync",
-    reason: `엑셀 기준 동기화 실행 (reset=${resetRemaining})`,
+    action_type: "default_shop_seed_sync",
+    reason: `기본 상점값 동기화 실행 (reset=${resetRemaining})`,
     before_data: null,
     after_data: {
       box_count: catalog.boxes.length,
       product_count: catalog.products.length,
-      source_files: catalog.sourceFiles,
+      source_type: catalog.sourceType,
     },
     created_at: now,
   });
@@ -192,6 +192,6 @@ export async function syncShopCatalogFromExcel(
   return {
     boxCount: catalog.boxes.length,
     productCount: catalog.products.length,
-    sourceFiles: catalog.sourceFiles,
+    sourceType: catalog.sourceType,
   };
 }

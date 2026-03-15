@@ -5,7 +5,7 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { rejectIfCrossOrigin } from "@/lib/security";
-import { syncShopCatalogFromExcel } from "@/lib/shop-db";
+import { syncShopCatalogFromDefaults } from "@/lib/shop-db";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
@@ -28,13 +28,13 @@ export async function POST(request: Request) {
   const resetRemaining = body.resetRemaining === true;
 
   try {
-    const result = await syncShopCatalogFromExcel(createAdminClient(), {
+    const result = await syncShopCatalogFromDefaults(createAdminClient(), {
       resetRemaining,
       adminId: user.id,
     });
     return NextResponse.json({
       ok: true,
-      message: `엑셀 동기화 완료 (상자 ${result.boxCount}개, 상품 ${result.productCount}개)`,
+      message: `기본값 동기화 완료 (상자 ${result.boxCount}개, 상품 ${result.productCount}개)`,
       ...result,
     });
   } catch (error) {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         message:
-          error instanceof Error ? error.message : "엑셀 동기화에 실패했습니다.",
+          error instanceof Error ? error.message : "기본값 동기화에 실패했습니다.",
       },
       { status: 500 }
     );

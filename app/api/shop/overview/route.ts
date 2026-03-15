@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
-import { isShopSchemaReady, syncShopCatalogFromExcel } from "@/lib/shop-db";
+import { isShopSchemaReady, syncShopCatalogFromDefaults } from "@/lib/shop-db";
 import { maskStudentName } from "@/lib/shop";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -50,7 +50,7 @@ export async function GET() {
   let safeBoxes = boxes ?? [];
   if (safeBoxes.length === 0) {
     try {
-      await syncShopCatalogFromExcel(supabase, { resetRemaining: false, adminId: null });
+      await syncShopCatalogFromDefaults(supabase, { resetRemaining: false, adminId: null });
       const { data: refreshedBoxes } = await supabase
         .from("shop_boxes")
         .select("id, code, name, coin_cost, sort_order")
@@ -67,7 +67,7 @@ export async function GET() {
       {
         ok: false,
         message:
-          "상점 초기 데이터가 비어 있습니다. 관리자 계정으로 상점 > 엑셀 기준 동기화를 1회 실행해 주세요.",
+          "상점 초기 데이터가 비어 있습니다. 관리자 계정으로 상점 > 기본값 동기화를 1회 실행해 주세요.",
       },
       { status: 503 }
     );

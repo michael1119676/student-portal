@@ -463,24 +463,24 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
   };
 
-  const handleSyncFromExcel = async (resetRemaining: boolean) => {
+  const handleSeedDefaults = async (resetRemaining: boolean) => {
     try {
       setMessage("");
-      const res = await fetch("/api/admin/shop/sync-from-excel", {
+      const res = await fetch("/api/admin/shop/seed-defaults", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetRemaining }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setMessage(data.message || "엑셀 동기화에 실패했습니다.");
+        setMessage(data.message || "기본값 동기화에 실패했습니다.");
         return;
       }
-      setMessage(data.message || "엑셀 동기화를 완료했습니다.");
+      setMessage(data.message || "기본값 동기화를 완료했습니다.");
       await fetchOverview();
       await fetchInventory(inventoryBoxCode);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "엑셀 동기화에 실패했습니다.");
+      setMessage(error instanceof Error ? error.message : "기본값 동기화에 실패했습니다.");
     }
   };
 
@@ -852,16 +852,16 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     <Button
                       variant="secondary"
                       className="rounded-xl bg-white/10 text-white hover:bg-white/20"
-                      onClick={() => void handleSyncFromExcel(false)}
+                      onClick={() => void handleSeedDefaults(false)}
                     >
-                      엑셀 기준 동기화
+                      기본값 동기화
                     </Button>
                     <Button
                       variant="secondary"
                       className="rounded-xl bg-white/10 text-white hover:bg-white/20"
-                      onClick={() => void handleSyncFromExcel(true)}
+                      onClick={() => void handleSeedDefaults(true)}
                     >
-                      엑셀 기준 재고 리셋
+                      기본값 재고 리셋
                     </Button>
                   </div>
 
