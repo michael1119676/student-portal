@@ -418,11 +418,6 @@ export default function PortalClient({
       .filter((point): point is { x: number; y: number } => point !== null);
   }, [seasonCData]);
 
-  const linePoints = useMemo(
-    () => myPlotPoints.map((point) => `${point.x},${point.y}`).join(" "),
-    [myPlotPoints]
-  );
-
   const smoothLinePath = useMemo(() => buildSmoothPath(myPlotPoints), [myPlotPoints]);
 
   const selectedNRoundDetail = useMemo(() => {
@@ -2047,56 +2042,29 @@ export default function PortalClient({
                                     0
                                   </div>
 
-                                  {linePoints && (
+                                  {myPlotPoints.length > 0 && (
                                     <svg
                                       viewBox="0 0 100 100"
                                       className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
-                                      <defs>
-                                        <filter id="lineGlow" x="-40%" y="-40%" width="180%" height="180%">
-                                          <feGaussianBlur stdDeviation="1.6" />
-                                        </filter>
-                                      </defs>
                                       {smoothLinePath && (
-                                        <>
-                                          <path
-                                            d={smoothLinePath}
-                                            fill="none"
-                                            stroke="#ef4444"
-                                            strokeOpacity="0.38"
-                                            strokeWidth="5.5"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            filter="url(#lineGlow)"
-                                          />
-                                          <path
-                                            d={smoothLinePath}
-                                            fill="none"
-                                            stroke="#f4555a"
-                                            strokeWidth="2.4"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                          />
-                                        </>
+                                        <path
+                                          d={smoothLinePath}
+                                          fill="none"
+                                          stroke="#ef4444"
+                                          strokeWidth="1.2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
                                       )}
                                       {myPlotPoints.map((point, index) => (
                                         <circle
                                           key={`my-point-${index}`}
                                           cx={point.x}
                                           cy={point.y}
-                                          r="2.05"
-                                          fill="#ffffff"
-                                          fillOpacity="0.85"
-                                        />
-                                      ))}
-                                      {myPlotPoints.map((point, index) => (
-                                        <circle
-                                          key={`my-point-core-${index}`}
-                                          cx={point.x}
-                                          cy={point.y}
-                                          r="1.3"
                                           fill="#ef4444"
+                                          r="1"
                                         />
                                       ))}
                                     </svg>
@@ -2194,7 +2162,7 @@ export default function PortalClient({
                             </div>
 
                             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                              <p className="mb-4 text-sm text-white/55">점수 분포 (10점 단위)</p>
+                              <p className="mb-4 text-sm text-white/55">점수 분포 (5점 단위)</p>
                               <div className="grid grid-cols-5 gap-3 sm:grid-cols-11">
                                 {selectedRoundDetail.histogram.map((bin) => {
                                   const maxCount = Math.max(
@@ -2391,52 +2359,29 @@ export default function PortalClient({
                                     0
                                   </div>
 
-                                  {nSmoothLinePath && (
+                                  {nPlotPoints.length > 0 && (
                                     <svg
                                       viewBox="0 0 100 100"
                                       className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
-                                      <defs>
-                                        <filter id="nLineGlow" x="-40%" y="-40%" width="180%" height="180%">
-                                          <feGaussianBlur stdDeviation="1.6" />
-                                        </filter>
-                                      </defs>
-                                      <path
-                                        d={nSmoothLinePath}
-                                        fill="none"
-                                        stroke="#ef4444"
-                                        strokeOpacity="0.38"
-                                        strokeWidth="5.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        filter="url(#nLineGlow)"
-                                      />
-                                      <path
-                                        d={nSmoothLinePath}
-                                        fill="none"
-                                        stroke="#f4555a"
-                                        strokeWidth="2.4"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
+                                      {nSmoothLinePath && (
+                                        <path
+                                          d={nSmoothLinePath}
+                                          fill="none"
+                                          stroke="#ef4444"
+                                          strokeWidth="1.2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      )}
                                       {nPlotPoints.map((point, index) => (
                                         <circle
                                           key={`n-point-${index}`}
                                           cx={point.x}
                                           cy={point.y}
-                                          r="2.05"
-                                          fill="#ffffff"
-                                          fillOpacity="0.85"
-                                        />
-                                      ))}
-                                      {nPlotPoints.map((point, index) => (
-                                        <circle
-                                          key={`n-point-core-${index}`}
-                                          cx={point.x}
-                                          cy={point.y}
-                                          r="1.3"
                                           fill="#ef4444"
+                                          r="1"
                                         />
                                       ))}
                                     </svg>
@@ -2562,6 +2507,32 @@ export default function PortalClient({
                               </div>
                             </div>
 
+                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <p className="mb-4 text-sm text-white/55">점수 분포 (10점 단위)</p>
+                              <div className="grid grid-cols-5 gap-3 sm:grid-cols-11">
+                                {selectedNRoundDetail.histogram.map((bin) => {
+                                  const maxCount = Math.max(
+                                    ...selectedNRoundDetail.histogram.map((item) => item.count),
+                                    1
+                                  );
+                                  const height = Math.max((bin.count / maxCount) * 100, 4);
+
+                                  return (
+                                    <div key={bin.label} className="flex flex-col items-center gap-2">
+                                      <div className="text-xs text-white/50">{bin.count}</div>
+                                      <div className="flex h-28 items-end">
+                                        <div
+                                          className="w-4 rounded-t bg-sky-300/70"
+                                          style={{ height: `${height}%` }}
+                                        />
+                                      </div>
+                                      <div className="text-[11px] text-white/45">{bin.label}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
                             <div className="grid gap-4 xl:grid-cols-2">
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                                 <div className="border-b border-white/10 px-4 py-3">
@@ -2632,8 +2603,8 @@ export default function PortalClient({
                                           <td
                                             className={`px-3 py-3 ${
                                               question.isWrong
-                                                ? "font-semibold text-red-200"
-                                                : "text-white/80"
+                                                ? "font-semibold text-red-300"
+                                                : "text-white"
                                             }`}
                                           >
                                             {question.myChoice ?? "-"}
@@ -2662,7 +2633,8 @@ export default function PortalClient({
                             </p>
                             <div className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
                               통계/점수 문의는 카카오톡 아이디 `jwlee2670` 또는
-                              `010-3676-2670`으로 연락 주세요.
+                              `010-3676-2670`으로 연락 주시면 빠르게 확인 후
+                              안내드리겠습니다.
                             </div>
                           </CardContent>
                         </Card>

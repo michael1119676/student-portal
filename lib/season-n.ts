@@ -176,7 +176,7 @@ function buildRoundRows(round: number, rawRound: RawRound, students: StudentRef[
 function buildHistogram(rows: RoundRow[]) {
   const bins = Array.from({ length: 11 }, (_, i) => {
     const start = i * 5;
-    const end = i === 10 ? 100 : start + 4;
+    const end = i === 10 ? 50 : start + 4;
     return { label: `${start}-${end}`, count: 0 };
   });
 
