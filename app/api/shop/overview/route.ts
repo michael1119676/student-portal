@@ -126,8 +126,8 @@ export async function GET() {
       code: box.code,
       name: box.name,
       coinCost: Number(box.coin_cost ?? 0),
-      remainingCount: remaining,
-      productCount: activeProducts.length,
+      remainingCount: user.role === "admin" ? remaining : null,
+      productCount: user.role === "admin" ? activeProducts.length : null,
     };
   });
 

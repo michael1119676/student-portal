@@ -13,8 +13,8 @@ type ShopBox = {
   code: string;
   name: string;
   coinCost: number;
-  remainingCount: number;
-  productCount: number;
+  remainingCount: number | null;
+  productCount: number | null;
 };
 
 type FeedItem = {
@@ -123,88 +123,6 @@ function boxBadgeClass(code: string) {
   return "from-cyan-400/70 to-blue-200/15";
 }
 
-function usePirateLikeBgm(enabled: boolean) {
-  const contextRef = useRef<AudioContext | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const startedRef = useRef(false);
-  const loopDurationSec = 6.2;
-
-  const stop = () => {
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (contextRef.current) {
-      void contextRef.current.close();
-      contextRef.current = null;
-    }
-    startedRef.current = false;
-  };
-
-  const scheduleLoop = (ctx: AudioContext) => {
-    const notes = [
-      { semitone: 0, dur: 0.28 },
-      { semitone: 3, dur: 0.28 },
-      { semitone: 5, dur: 0.34 },
-      { semitone: 7, dur: 0.42 },
-      { semitone: 5, dur: 0.28 },
-      { semitone: 3, dur: 0.28 },
-      { semitone: 0, dur: 0.4 },
-      { semitone: -2, dur: 0.4 },
-      { semitone: 0, dur: 0.4 },
-    ];
-    const baseHz = 196;
-    let t = ctx.currentTime + 0.04;
-    for (const note of notes) {
-      const freq = baseHz * Math.pow(2, note.semitone / 12);
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(freq, t);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.06, t + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + note.dur);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + note.dur + 0.03);
-      t += note.dur + 0.02;
-    }
-  };
-
-  useEffect(() => {
-    if (!enabled) {
-      stop();
-      return;
-    }
-
-    const start = async () => {
-      if (startedRef.current) return;
-      const ctx = new window.AudioContext();
-      if (ctx.state === "suspended") {
-        await ctx.resume();
-      }
-      contextRef.current = ctx;
-      scheduleLoop(ctx);
-      timerRef.current = window.setInterval(() => scheduleLoop(ctx), loopDurationSec * 1000);
-      startedRef.current = true;
-    };
-
-    const onFirstInteraction = () => {
-      void start();
-      window.removeEventListener("pointerdown", onFirstInteraction);
-      window.removeEventListener("keydown", onFirstInteraction);
-    };
-
-    window.addEventListener("pointerdown", onFirstInteraction);
-    window.addEventListener("keydown", onFirstInteraction);
-    return () => {
-      window.removeEventListener("pointerdown", onFirstInteraction);
-      window.removeEventListener("keydown", onFirstInteraction);
-      stop();
-    };
-  }, [enabled]);
-}
-
 export default function ShopClient({ initialUser }: { initialUser: SessionUser }) {
   const [coinBalance, setCoinBalance] = useState(0);
   const [boxes, setBoxes] = useState<ShopBox[]>([]);
@@ -236,8 +154,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [coinAdjustDelta, setCoinAdjustDelta] = useState("");
   const [coinAdjustReason, setCoinAdjustReason] = useState("");
   const isAdmin = initialUser.role === "admin";
-
-  usePirateLikeBgm(true);
 
   const filteredStudents = useMemo(() => {
     const keyword = studentQuery.trim().toLowerCase();
@@ -666,7 +582,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {boxes.map((box) => {
               const isOpening = openingBox === box.code;
-              const canOpen = coinBalance >= box.coinCost && box.remainingCount > 0 && !isOpening;
+              const soldOut = box.remainingCount === 0;
+              const canOpen = coinBalance >= box.coinCost && !soldOut && !isOpening;
               return (
                 <Card
                   key={box.code}
@@ -682,7 +599,9 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     </div>
                     <CardTitle className="text-2xl">{box.coinCost} 코인</CardTitle>
                     <CardDescription className="text-white/55">
-                      남은 재고 {box.remainingCount}개 · 상품 {box.productCount}종
+                      {isAdmin
+                        ? `남은 재고 ${box.remainingCount ?? "-"}개 · 상품 ${box.productCount ?? "-"}종`
+                        : "재고 정보는 관리자 계정에서만 확인할 수 있습니다."}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -698,7 +617,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                       disabled={!canOpen}
                       className="w-full rounded-2xl bg-amber-300 text-black hover:bg-amber-200 disabled:bg-white/20 disabled:text-white/50"
                     >
-                      {box.remainingCount <= 0
+                      {soldOut
                         ? "재고 소진"
                         : coinBalance < box.coinCost
                           ? "코인 부족"
