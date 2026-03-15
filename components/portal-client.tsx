@@ -290,7 +290,7 @@ function normalizePhone(phone: string) {
 
 function normalizeClassNameLabel(className: string | null | undefined) {
   if (!className) return className;
-  return className.trim() === "영상반" ? "녹화강의반" : className;
+  return className.trim() === "녹화강의반" ? "영상반" : className;
 }
 
 function ScriptLogo() {

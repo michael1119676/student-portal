@@ -115,12 +115,45 @@ const ANSWER_KEYS: Record<number, number[]> = {
 
 function normalizeDisplayClassName(value: string) {
   const normalized = String(value || "").trim();
-  if (normalized === "영상반") return "녹화강의반";
+  if (normalized === "녹화강의반" || normalized === "영상반") return "영상반";
   return normalized || "미분류";
 }
 
 function toOneDecimal(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function classOrder(className: string) {
+  if (className === "토요일반" || className.startsWith("토")) return 0;
+  if (className === "금요일반" || className.startsWith("금")) return 1;
+  if (
+    className === "영상반" ||
+    className.startsWith("영상") ||
+    className.startsWith("녹")
+  )
+    return 2;
+  if (className === "전체") return 3;
+  return 4;
+}
+
+function buildStatItem(className: string, scores: number[]) {
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const sorted = [...scores].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  const variance =
+    scores.reduce((acc, cur) => acc + (cur - avg) ** 2, 0) / scores.length;
+
+  return {
+    className,
+    average: toOneDecimal(avg),
+    median: toOneDecimal(median),
+    stdDev: toOneDecimal(Math.sqrt(variance)),
+    max: Math.max(...scores),
+    min: Math.min(...scores),
+    count: scores.length,
+  };
 }
 
 function normalizeScore(value: number | null | undefined) {
@@ -230,27 +263,23 @@ function buildClassStats(rows: RoundRow[]) {
     grouped.set(key, list);
   }
 
-  return [...grouped.entries()]
-    .map(([className, scores]) => {
-      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-      const sorted = [...scores].sort((a, b) => a - b);
-      const mid = Math.floor(sorted.length / 2);
-      const median =
-        sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-      const variance =
-        scores.reduce((acc, cur) => acc + (cur - avg) ** 2, 0) / scores.length;
+  const stats = [...grouped.entries()].map(([className, scores]) =>
+    buildStatItem(className, scores)
+  );
 
-      return {
-        className,
-        average: toOneDecimal(avg),
-        median: toOneDecimal(median),
-        stdDev: toOneDecimal(Math.sqrt(variance)),
-        max: Math.max(...scores),
-        min: Math.min(...scores),
-        count: scores.length,
-      };
-    })
-    .sort((a, b) => a.className.localeCompare(b.className, "ko"));
+  const allScores = rows
+    .map((row) => row.score)
+    .filter((value): value is number => value !== null);
+
+  if (allScores.length > 0) {
+    stats.push(buildStatItem("전체", allScores));
+  }
+
+  return stats.sort((a, b) => {
+    const rankDiff = classOrder(a.className) - classOrder(b.className);
+    if (rankDiff !== 0) return rankDiff;
+    return a.className.localeCompare(b.className, "ko");
+  });
 }
 
 function buildQuestionStats(
