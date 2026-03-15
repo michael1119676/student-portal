@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonCAdminStats } from "@/lib/season-c";
+import { buildSeasonNAdminStats } from "@/lib/season-n";
 
 export async function GET(request: Request) {
   const cookieStore = await cookies();
@@ -24,9 +25,9 @@ export async function GET(request: Request) {
     );
   }
 
-  if (season !== "C") {
+  if (!["C", "N", "M"].includes(season)) {
     return NextResponse.json(
-      { ok: false, message: `Season ${season} 통계는 업데이트 예정입니다.` },
+      { ok: false, message: `지원하지 않는 시즌입니다: ${season}` },
       { status: 400 }
     );
   }
@@ -44,7 +45,16 @@ export async function GET(request: Request) {
     );
   }
 
-  const stats = buildSeasonCAdminStats(students, round);
+  if (season === "M") {
+    return NextResponse.json(
+      { ok: false, message: "M 시즌 통계는 업데이트 예정입니다." },
+      { status: 400 }
+    );
+  }
+
+  const stats = season === "N"
+    ? buildSeasonNAdminStats(students, round)
+    : buildSeasonCAdminStats(students, round);
   return NextResponse.json({
     ok: true,
     stats,

@@ -76,6 +76,38 @@ export type SeasonNViewData = {
   details: SeasonNRoundDetail[];
 };
 
+export type SeasonNAdminStats = {
+  season: "N";
+  round: number;
+  participantCount: number;
+  averageScore: number;
+  maxScore: number;
+  minScore: number;
+  histogram: Array<{
+    label: string;
+    count: number;
+  }>;
+  classStats: Array<{
+    className: string;
+    average: number;
+    median: number;
+    stdDev: number;
+    max: number;
+    min: number;
+    count: number;
+  }>;
+  weakQuestions: Array<{
+    question: number;
+    correctChoice: number | null;
+    correctRate: number;
+    choiceRates: Array<{
+      choice: number;
+      rate: number;
+      count: number;
+    }>;
+  }>;
+};
+
 const ROUND_COUNT = 12;
 const ANSWER_KEYS: Record<number, number[]> = {
   1: "23521114535424524333".split("").map(Number),
@@ -322,4 +354,50 @@ export function buildSeasonNViewData(
   }
 
   return { rounds, details };
+}
+
+export function buildSeasonNAdminStats(
+  students: StudentRef[],
+  round: number
+): SeasonNAdminStats {
+  const data = seasonNRoundsRaw as RawSeasonNData;
+  const safeRound = Math.max(1, Math.min(ROUND_COUNT, Math.round(round)));
+  const rawRound = getRawRound(data, safeRound);
+  const rows = buildRoundRows(safeRound, rawRound, students);
+  const scores = rows
+    .map((row) => row.score)
+    .filter((score): score is number => score !== null);
+  const answerKey = ANSWER_KEYS[safeRound] ?? [];
+  const questionCount = Math.max(rawRound.questionCount, answerKey.length);
+  const questionStats = buildQuestionStats(rows, questionCount, answerKey, []);
+  const weakQuestions = questionStats
+    .map((question) => {
+      const correctItem = question.choices.find(
+        (choice) => choice.choice === question.correctChoice
+      );
+      return {
+        question: question.question,
+        correctChoice: question.correctChoice,
+        correctRate: correctItem?.rate ?? 0,
+        choiceRates: question.choices.map((choice) => ({
+          choice: choice.choice,
+          rate: choice.rate,
+          count: choice.count,
+        })),
+      };
+    })
+    .sort((a, b) => a.correctRate - b.correctRate);
+
+  return {
+    season: "N",
+    round: safeRound,
+    participantCount: scores.length,
+    averageScore:
+      scores.length > 0 ? toOneDecimal(scores.reduce((acc, cur) => acc + cur, 0) / scores.length) : 0,
+    maxScore: scores.length > 0 ? Math.max(...scores) : 0,
+    minScore: scores.length > 0 ? Math.min(...scores) : 0,
+    histogram: buildHistogram(rows),
+    classStats: buildClassStats(rows),
+    weakQuestions,
+  };
 }

@@ -178,7 +178,7 @@ type AdminStatsResponse = {
   ok: boolean;
   message?: string;
   stats?: {
-    season: "C";
+    season: "C" | "N";
     round: number;
     participantCount: number;
     averageScore: number;
@@ -218,9 +218,9 @@ type PortalHistoryState = {
 };
 
 const seasons = [
-  { id: "C", title: "Season C", subtitle: "시즌 C 성적 확인" },
-  { id: "N", title: "Season N", subtitle: "시즌 N 성적 확인" },
-  { id: "M", title: "Season M", subtitle: "시즌 M 성적 확인" },
+  { id: "C", title: "C 시즌", subtitle: "C 시즌 성적 확인" },
+  { id: "N", title: "N 시즌", subtitle: "N 시즌 성적 확인" },
+  { id: "M", title: "M 시즌", subtitle: "M 시즌 성적 확인" },
 ];
 
 const universityProfiles = {
@@ -393,6 +393,7 @@ export default function PortalClient({
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
   const canShowStudentPortal = isAdminMode ? !!sessionUser && !!selectedStudent : isLoggedIn;
   const profile = universityProfiles[targetUniversity];
+  const statsRoundMax = statsSeason === "N" ? 12 : 10;
 
   const canLogin = useMemo(() => {
     return (
@@ -834,6 +835,11 @@ export default function PortalClient({
     };
   }, [isAdminMode, adminStep, statsSeason, statsRound]);
 
+  useEffect(() => {
+    if (statsRound <= statsRoundMax) return;
+    setStatsRound(statsRoundMax);
+  }, [statsRound, statsRoundMax]);
+
   function handleDownloadStatsPdf() {
     if (!adminStats) return;
 
@@ -863,7 +869,7 @@ export default function PortalClient({
     const html = `
       <html>
         <head>
-          <title>Season ${adminStats.season} ${adminStats.round}회 통계</title>
+          <title>${adminStats.season} 시즌 ${adminStats.round}회 통계</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 28px; color: #111; }
             h1 { margin: 0 0 8px; font-size: 26px; }
@@ -879,7 +885,7 @@ export default function PortalClient({
           </style>
         </head>
         <body>
-          <h1>Season ${adminStats.season} ${adminStats.round}회 통계</h1>
+          <h1>${adminStats.season} 시즌 ${adminStats.round}회 통계</h1>
           <p>전체 통계 및 반별 통계 리포트</p>
           <div class="cards">
             <div class="card"><div class="label">응시 인원</div><div class="value">${adminStats.participantCount}</div></div>
@@ -1436,7 +1442,7 @@ export default function PortalClient({
                           <>
                             <div className="flex items-center justify-between">
                               <p className="text-sm text-white/70">
-                                선택 시즌: <span className="font-semibold">Season {adminCutSeason}</span>
+                                선택 시즌: <span className="font-semibold">{adminCutSeason} 시즌</span>
                               </p>
                               <Button
                                 variant="secondary"
@@ -1508,7 +1514,7 @@ export default function PortalClient({
                               </div>
                             </div>
                             <div className="rounded-[1.2rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65">
-                              저장 위치: Season {adminCutSeason} {adminNInputRound}회 전역 컷
+                              저장 위치: {adminCutSeason} 시즌 {adminNInputRound}회 전역 컷
                             </div>
                             <div className="flex flex-wrap gap-3">
                               <Button
@@ -1554,9 +1560,9 @@ export default function PortalClient({
                               }
                               className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
                             >
-                              <option value="C">Season C</option>
-                              <option value="M">Season M</option>
-                              <option value="N">Season N</option>
+                              <option value="C">C 시즌</option>
+                              <option value="N">N 시즌</option>
+                              <option value="M">M 시즌</option>
                             </select>
                           </div>
                           <div className="space-y-2">
@@ -1566,7 +1572,7 @@ export default function PortalClient({
                               onChange={(e) => setStatsRound(Number(e.target.value))}
                               className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
                             >
-                              {Array.from({ length: 10 }, (_, i) => i + 1).map((round) => (
+                              {Array.from({ length: statsRoundMax }, (_, i) => i + 1).map((round) => (
                                 <option key={round} value={round}>
                                   {round}회
                                 </option>
@@ -2053,7 +2059,7 @@ export default function PortalClient({
                       <p className="text-base text-white/55 sm:text-lg">
                         {isAdminMode
                           ? "관리자 로그인 상태로 학생 화면과 동일하게 확인할 수 있습니다."
-                          : "Season C / M / N 중 원하는 시즌을 눌러 성적 화면으로 이동할 수 있습니다."}
+                          : "C 시즌 / N 시즌 / M 시즌 중 원하는 시즌을 눌러 성적 화면으로 이동할 수 있습니다."}
                       </p>
                     </div>
 
@@ -2099,7 +2105,7 @@ export default function PortalClient({
                       </div>
                       <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                         <CardHeader>
-                          <CardTitle className="text-3xl">Season C (1~10회)</CardTitle>
+                          <CardTitle className="text-3xl">C 시즌 (1~10회)</CardTitle>
                           <CardDescription className="text-white/55">
                             회차를 누르면 해당 회차 통계를 확인할 수 있습니다. 회색
                             막대는 평균, 빨간 점과 선은 내 점수입니다.
@@ -2418,7 +2424,7 @@ export default function PortalClient({
                       </div>
                       <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                         <CardHeader>
-                          <CardTitle className="text-3xl">Season N (1~12회)</CardTitle>
+                          <CardTitle className="text-3xl">N 시즌 (1~12회)</CardTitle>
                           <CardDescription className="text-white/55">
                             회차를 누르면 해당 회차 통계를 확인할 수 있습니다. 회색
                             막대는 평균, 빨간 점과 선은 내 점수입니다.
@@ -2766,10 +2772,10 @@ export default function PortalClient({
                       </div>
                       <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                         <CardHeader>
-                          <CardTitle className="text-3xl">Season {selectedSeason}</CardTitle>
+                          <CardTitle className="text-3xl">{selectedSeason} 시즌</CardTitle>
                           <CardDescription className="text-white/55">
                             {selectedSeason === "N" || selectedSeason === "M"
-                              ? `Season ${selectedSeason}은 현재 업데이트 예정입니다.`
+                              ? `${selectedSeason} 시즌은 현재 업데이트 예정입니다.`
                               : "이 시즌은 아직 연결 전입니다. 먼저 시즌 C 화면을 완성해둔 상태입니다."}
                           </CardDescription>
                         </CardHeader>
