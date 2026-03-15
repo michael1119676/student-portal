@@ -284,6 +284,21 @@ const quickLinks = [
   },
 ];
 
+const teacherCareer = [
+  "서울과학고등학교 졸업",
+  "가톨릭대학교 의예과 25학번 정시 입학",
+  "연세대 의대 정시 합격",
+  "23수능 물리1, 24~26수능 물리2 만점",
+  "2025 수강생 60명",
+];
+
+const teacherReviewHighlights = [
+  "강의 전달력과 손필기 퀄리티가 높아 강의만으로도 1등급에 가까워졌다는 후기가 반복됩니다.",
+  "작년에 안 보이던 풀이가 보이고, 킬러 문항 접근이 정리되었다는 의견이 많습니다.",
+  "개념과 암기 파트를 분리해 설명해줘서 공부 방향이 선명해졌다는 피드백이 있습니다.",
+  "질문 응답이 빠르고 디테일해서 실수 교정에 큰 도움이 되었다는 후기가 확인됩니다.",
+];
+
 function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
@@ -370,10 +385,12 @@ export default function PortalClient({
   const [seasonCData, setSeasonCData] = useState<SeasonCResponse["data"] | null>(null);
   const [seasonCLoading, setSeasonCLoading] = useState(false);
   const [seasonCError, setSeasonCError] = useState("");
+  const [seasonCLoadedForId, setSeasonCLoadedForId] = useState<string | null>(null);
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
   const [seasonNData, setSeasonNData] = useState<SeasonNResponse["data"] | null>(null);
   const [seasonNLoading, setSeasonNLoading] = useState(false);
   const [seasonNError, setSeasonNError] = useState("");
+  const [seasonNLoadedForId, setSeasonNLoadedForId] = useState<string | null>(null);
   const [selectedNRound, setSelectedNRound] = useState<number | null>(null);
   const [adminCutSeason, setAdminCutSeason] = useState<"N" | "M" | null>(null);
   const [adminNInputRound, setAdminNInputRound] = useState(1);
@@ -388,6 +405,7 @@ export default function PortalClient({
   const historyReadyRef = useRef(false);
   const isApplyingPopStateRef = useRef(false);
   const lastHistoryKeyRef = useRef("");
+  const studentProfileCacheRef = useRef<Record<string, StudentProfile | null>>({});
 
   const isLoggedIn = !!sessionUser;
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
@@ -490,17 +508,24 @@ export default function PortalClient({
             managedStudents.find((student) => student.id === state.selectedStudentId) ?? null;
           setSelectedStudent(nextStudent);
           if (nextStudent) {
-            void fetch(`/api/admin/student?studentId=${encodeURIComponent(nextStudent.id)}`, {
-              cache: "no-store",
-            })
-              .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
-              .then(({ ok, data }) => {
-                if (!ok) return;
-                applyProfile(data.profile as StudentProfile | undefined);
+            const cached = studentProfileCacheRef.current[nextStudent.id];
+            if (cached !== undefined) {
+              applyProfile(cached);
+            } else {
+              void fetch(`/api/admin/student?studentId=${encodeURIComponent(nextStudent.id)}`, {
+                cache: "no-store",
               })
-              .catch(() => {
-                // Ignore popstate profile fetch failures and keep current UI state.
-              });
+                .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+                .then(({ ok, data }) => {
+                  if (!ok) return;
+                  const profile = (data.profile as StudentProfile | undefined) ?? null;
+                  studentProfileCacheRef.current[nextStudent.id] = profile;
+                  applyProfile(profile);
+                })
+                .catch(() => {
+                  // Ignore popstate profile fetch failures and keep current UI state.
+                });
+            }
           }
         }
       }
@@ -591,6 +616,15 @@ export default function PortalClient({
   useEffect(() => {
     if (selectedSeason !== "C") return;
     if (!canShowStudentPortal || !visibleUser?.id) return;
+    if (seasonCData && seasonCLoadedForId === visibleUser.id) {
+      setSeasonCLoading(false);
+      setSeasonCError("");
+      if (selectedRound === null) {
+        const defaultRound = seasonCData.rounds.find((round) => round.myScore !== null)?.round ?? 1;
+        setSelectedRound(defaultRound);
+      }
+      return;
+    }
 
     let cancelled = false;
 
@@ -617,6 +651,7 @@ export default function PortalClient({
 
         if (!cancelled) {
           setSeasonCData(data.data);
+          setSeasonCLoadedForId(visibleUser.id);
           const defaultRound =
             data.data.rounds.find((round) => round.myScore !== null)?.round ?? 1;
           setSelectedRound(defaultRound);
@@ -625,6 +660,7 @@ export default function PortalClient({
         if (!cancelled) {
           setSeasonCError("시즌 C 데이터를 불러오지 못했습니다.");
           setSeasonCData(null);
+          setSeasonCLoadedForId(null);
           setSelectedRound(null);
         }
       } finally {
@@ -639,11 +675,20 @@ export default function PortalClient({
     return () => {
       cancelled = true;
     };
-  }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode]);
+  }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode, seasonCData, seasonCLoadedForId, selectedRound]);
 
   useEffect(() => {
     if (selectedSeason !== "N") return;
     if (!canShowStudentPortal || !visibleUser?.id) return;
+    if (seasonNData && seasonNLoadedForId === visibleUser.id) {
+      setSeasonNLoading(false);
+      setSeasonNError("");
+      if (selectedNRound === null) {
+        const defaultRound = seasonNData.rounds.find((r) => r.myScore !== null)?.round ?? 1;
+        setSelectedNRound(defaultRound);
+      }
+      return;
+    }
 
     let cancelled = false;
     const loadSeasonN = async () => {
@@ -668,6 +713,7 @@ export default function PortalClient({
 
         if (!cancelled) {
           setSeasonNData(data.data);
+          setSeasonNLoadedForId(visibleUser.id);
           const defaultRound = data.data.rounds.find((r) => r.myScore !== null)?.round ?? 1;
           setSelectedNRound(defaultRound);
         }
@@ -675,6 +721,7 @@ export default function PortalClient({
         if (!cancelled) {
           setSeasonNError("시즌 N 데이터를 불러오지 못했습니다.");
           setSeasonNData(null);
+          setSeasonNLoadedForId(null);
           setSelectedNRound(null);
         }
       } finally {
@@ -686,7 +733,7 @@ export default function PortalClient({
     return () => {
       cancelled = true;
     };
-  }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode]);
+  }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode, seasonNData, seasonNLoadedForId, selectedNRound]);
 
   useEffect(() => {
     if (!selectedNRoundDetail) return;
@@ -1076,6 +1123,8 @@ export default function PortalClient({
       return;
     }
 
+    studentProfileCacheRef.current[student.id] =
+      (data.profile as StudentProfile | undefined) ?? null;
     setSelectedStudent(student);
     applyProfile(data.profile as StudentProfile | undefined);
     setSelectedSeason(null);
@@ -1270,9 +1319,9 @@ export default function PortalClient({
                   </CardContent>
                 </Card>
 
-                <div className="lg:col-span-2">
-                  <div className="flex justify-center">
-                    <div className="grid w-full max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+	                <div className="lg:col-span-2">
+	                  <div className="flex justify-center">
+	                    <div className="grid w-full max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       {quickLinks.map((link) => {
                         const Icon = link.icon;
                         return (
@@ -1298,11 +1347,101 @@ export default function PortalClient({
                           </a>
                         );
                       })}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ) : isAdminMode && !selectedStudent ? (
+	                    </div>
+	                  </div>
+	                </div>
+
+	                <section id="teacher" className="lg:col-span-2 mt-2">
+	                  <div className="overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.12),transparent_38%),rgba(10,12,18,0.9)] p-6 sm:p-8">
+	                    <div className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+	                      <div className="space-y-5">
+	                        <div className="space-y-2">
+	                          <p className="text-xs uppercase tracking-[0.25em] text-cyan-200/75">
+	                            Instructor Profile
+	                          </p>
+	                          <h3 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+	                            한서준 T 강사 소개
+	                          </h3>
+	                          <p className="text-sm leading-7 text-white/70 sm:text-base">
+	                            물리2에서 필요한 개념 정리, 실전 스킬, 손필기 풀이를 한 흐름으로
+	                            연결해 주는 수업을 목표로 합니다.
+	                          </p>
+	                        </div>
+
+	                        <div className="grid gap-2">
+	                          {teacherCareer.map((item) => (
+	                            <div
+	                              key={item}
+	                              className="rounded-xl border border-white/12 bg-black/20 px-4 py-2.5 text-sm text-white/88"
+	                            >
+	                              {item}
+	                            </div>
+	                          ))}
+	                        </div>
+
+	                        <a
+	                          href="/teacher/review-notes.pdf"
+	                          target="_blank"
+	                          rel="noreferrer"
+	                          className="inline-flex items-center rounded-xl border border-cyan-200/35 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/20"
+	                        >
+	                          후기/필기본 원문 보기 (PDF)
+	                        </a>
+	                      </div>
+
+	                      <div className="space-y-4">
+	                        <div className="rounded-2xl border border-white/12 bg-black/20 p-4">
+	                          <p className="mb-3 text-sm font-semibold text-white/85">수강 후기 요약</p>
+	                          <div className="space-y-2.5">
+	                            {teacherReviewHighlights.map((item) => (
+	                              <p
+	                                key={item}
+	                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm leading-6 text-white/80"
+	                              >
+	                                {item}
+	                              </p>
+	                            ))}
+	                          </div>
+	                        </div>
+
+	                        <div className="grid grid-cols-2 gap-3">
+	                          <a
+	                            href="/teacher/note-preview-1.png"
+	                            target="_blank"
+	                            rel="noreferrer"
+	                            className="group overflow-hidden rounded-xl border border-white/12 bg-black/20"
+	                          >
+	                            <Image
+	                              src="/teacher/note-preview-1.png"
+	                              alt="한서준 T 필기본 예시 1"
+	                              width={420}
+	                              height={420}
+	                              className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+	                            />
+	                            <p className="px-3 py-2 text-xs text-white/70">필기본 예시 1</p>
+	                          </a>
+	                          <a
+	                            href="/teacher/note-preview-2.png"
+	                            target="_blank"
+	                            rel="noreferrer"
+	                            className="group overflow-hidden rounded-xl border border-white/12 bg-black/20"
+	                          >
+	                            <Image
+	                              src="/teacher/note-preview-2.png"
+	                              alt="한서준 T 필기본 예시 2"
+	                              width={420}
+	                              height={420}
+	                              className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+	                            />
+	                            <p className="px-3 py-2 text-xs text-white/70">필기본 예시 2</p>
+	                          </a>
+	                        </div>
+	                      </div>
+	                    </div>
+	                  </div>
+	                </section>
+	              </motion.div>
+	            ) : isAdminMode && !selectedStudent ? (
               <motion.div
                 key={`admin-${adminStep}`}
                 initial={{ opacity: 0, y: 24 }}
