@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Gift, RefreshCw, Shield, Sparkles } from "lucide-react";
+import { ArrowLeft, Gift, RefreshCw, Shield, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -97,6 +97,21 @@ type WeeklyWinner = {
   studentId: string;
   studentName: string;
   studentPhone: string;
+};
+
+type ProbabilityProduct = {
+  id: string;
+  name: string;
+  baseProbabilityPercent: number | null;
+  realtimeProbabilityPercent: number | null;
+  remainingQuantity: number | null;
+  isRare: boolean;
+};
+
+type ProbabilityBox = {
+  code: string;
+  name: string;
+  products: ProbabilityProduct[];
 };
 
 type AdminPanelTab = "inventory" | "studentLogs" | "weeklyLogs" | "coinAdjust";
@@ -208,6 +223,9 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [coinAdjustStudentId, setCoinAdjustStudentId] = useState("");
   const [coinAdjustDelta, setCoinAdjustDelta] = useState("");
   const [coinAdjustReason, setCoinAdjustReason] = useState("");
+  const [probabilityModalOpen, setProbabilityModalOpen] = useState(false);
+  const [probabilityLoading, setProbabilityLoading] = useState(false);
+  const [probabilityBoxes, setProbabilityBoxes] = useState<ProbabilityBox[]>([]);
   const isAdmin = initialUser.role === "admin";
 
   const filteredStudents = useMemo(() => {
@@ -222,6 +240,22 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     () => inventoryBoxes.find((box) => box.code === inventoryBoxCode) ?? null,
     [inventoryBoxes, inventoryBoxCode]
   );
+
+  const selectedInventoryRealtimeProbability = useMemo(() => {
+    const rows = selectedInventoryBox?.products ?? [];
+    const totalRemaining = rows.reduce(
+      (acc, product) => acc + Math.max(0, Number(product.remainingQuantity ?? 0)),
+      0
+    );
+    const map = new Map<string, number | null>();
+    for (const product of rows) {
+      const remaining = Math.max(0, Number(product.remainingQuantity ?? 0));
+      const probability =
+        totalRemaining > 0 ? Math.round((remaining / totalRemaining) * 1000000) / 10000 : null;
+      map.set(product.id, probability);
+    }
+    return map;
+  }, [selectedInventoryBox]);
 
   const boxNameMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -259,6 +293,20 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       throw new Error(data.message || "내역을 불러오지 못했습니다.");
     }
     setMyLogs((data.logs ?? []) as MyLog[]);
+  };
+
+  const fetchProbabilityTable = async () => {
+    setProbabilityLoading(true);
+    try {
+      const res = await fetch("/api/shop/probability-table", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "확률 고지표를 불러오지 못했습니다.");
+      }
+      setProbabilityBoxes((data.boxes ?? []) as ProbabilityBox[]);
+    } finally {
+      setProbabilityLoading(false);
+    }
   };
 
   const fetchAdminStudents = useCallback(async () => {
@@ -720,6 +768,92 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
         </div>
       )}
 
+      {probabilityModalOpen && (
+        <div className="fixed inset-0 z-[72]">
+          <div
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+            onClick={() => setProbabilityModalOpen(false)}
+          />
+          <div className="relative z-[73] mx-auto mt-8 w-[min(1100px,calc(100%-2rem))] overflow-hidden rounded-[2rem] border border-white/20 bg-[#070b13] shadow-[0_40px_120px_rgba(0,0,0,0.65)]">
+            <div className="flex items-start justify-between border-b border-white/10 px-6 py-5">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-amber-200/80">Probability Notice</p>
+                <h2 className="mt-1 text-2xl font-semibold text-white">상자별 상품 확률 고지표</h2>
+                <p className="mt-1 text-xs text-white/55">
+                  초기 확률은 상점 기준값이며, 실제 추첨은 비복원(남은 재고) 기준으로 진행됩니다.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                className="rounded-xl bg-white/10 text-white hover:bg-white/20"
+                onClick={() => setProbabilityModalOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="max-h-[72vh] overflow-y-auto p-6">
+              {probabilityLoading ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-white/65">
+                  확률 고지표를 불러오는 중...
+                </div>
+              ) : probabilityBoxes.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-white/65">
+                  표시할 확률 정보가 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {probabilityBoxes.map((box) => (
+                    <div key={box.code} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <p className="mb-3 text-sm font-medium text-white">{box.name}</p>
+                      <div className="overflow-x-auto rounded-xl border border-white/10">
+                        <table className="w-full min-w-[700px] text-sm">
+                          <thead className="bg-black/40 text-white/65">
+                            <tr>
+                              <th className="px-3 py-2 text-left">상품명</th>
+                              <th className="px-3 py-2 text-left">초기 확률(%)</th>
+                              {isAdmin && <th className="px-3 py-2 text-left">실시간 확률(%)</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {box.products.map((product) => (
+                              <tr key={product.id} className="border-t border-white/10">
+                                <td className="px-3 py-2">{product.name}</td>
+                                <td className="px-3 py-2">
+                                  {product.baseProbabilityPercent === null
+                                    ? "-"
+                                    : product.baseProbabilityPercent.toFixed(4)}
+                                </td>
+                                {isAdmin && (
+                                  <td className="px-3 py-2">
+                                    {product.realtimeProbabilityPercent === null
+                                      ? "-"
+                                      : product.realtimeProbabilityPercent.toFixed(4)}
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                            {box.products.length === 0 && (
+                              <tr>
+                                <td
+                                  colSpan={isAdmin ? 3 : 2}
+                                  className="px-3 py-4 text-center text-white/55"
+                                >
+                                  등록된 상품이 없습니다.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -739,6 +873,18 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                 포털로 돌아가기
               </Button>
             </Link>
+            <Button
+              variant="secondary"
+              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+              onClick={() => {
+                setProbabilityModalOpen(true);
+                void fetchProbabilityTable().catch((error) => {
+                  setMessage(error instanceof Error ? error.message : "확률 고지표를 불러오지 못했습니다.");
+                });
+              }}
+            >
+              확률 고지표
+            </Button>
             <Button
               variant="secondary"
               className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
@@ -996,13 +1142,14 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   </div>
 
                   <div className="overflow-x-auto rounded-2xl border border-white/10">
-                    <table className="w-full min-w-[920px] text-sm">
+                    <table className="w-full min-w-[1020px] text-sm">
                       <thead className="bg-black/40 text-white/65">
                         <tr>
                           <th className="px-3 py-2 text-left">상품명</th>
                           <th className="px-3 py-2 text-left">초기 수량</th>
                           <th className="px-3 py-2 text-left">남은 수량</th>
                           <th className="px-3 py-2 text-left">기준 확률(%)</th>
+                          <th className="px-3 py-2 text-left">실시간 확률(%)</th>
                           <th className="px-3 py-2 text-left">희귀</th>
                           <th className="px-3 py-2 text-left">수정</th>
                         </tr>
@@ -1010,7 +1157,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                       <tbody>
                         {inventoryLoading ? (
                           <tr>
-                            <td colSpan={6} className="px-3 py-4 text-center text-white/55">
+                            <td colSpan={7} className="px-3 py-4 text-center text-white/55">
                               재고 정보를 불러오는 중입니다...
                             </td>
                           </tr>
@@ -1037,6 +1184,14 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                                   : product.baseProbabilityPercent.toFixed(4)}
                               </td>
                               <td className="px-3 py-2">
+                                {selectedInventoryRealtimeProbability.get(product.id) === null ||
+                                selectedInventoryRealtimeProbability.get(product.id) === undefined
+                                  ? "-"
+                                  : (selectedInventoryRealtimeProbability.get(product.id) as number).toFixed(
+                                      4
+                                    )}
+                              </td>
+                              <td className="px-3 py-2">
                                 {product.isRare ? (
                                   <span className="rounded-full border border-rose-300/35 bg-rose-500/20 px-2 py-0.5 text-xs text-rose-100">
                                     희귀
@@ -1059,7 +1214,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         )}
                         {!inventoryLoading && !selectedInventoryBox?.products.length && (
                           <tr>
-                            <td colSpan={6} className="px-3 py-4 text-center text-white/55">
+                            <td colSpan={7} className="px-3 py-4 text-center text-white/55">
                               표시할 상품이 없습니다.
                             </td>
                           </tr>
