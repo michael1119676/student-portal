@@ -820,9 +820,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         </div>
                       )}
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
-                      <div className="pointer-events-none absolute bottom-2 right-3 text-[11px] tracking-wide text-white/80">
-                        대기 영상
-                      </div>
                     </div>
                     <Button
                       onClick={() => void handleDraw(box.code)}
