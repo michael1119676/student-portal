@@ -52,10 +52,9 @@ export async function POST(request: Request) {
   });
 
   if (error) {
-    const fallback =
-      error.message.includes("shop_draw_box")
-        ? "상점 트랜잭션 함수가 없습니다. sql/create_shop_system.sql을 실행해 주세요."
-        : "상자 열기에 실패했습니다.";
+    const fallback = error.message.includes("shop_draw_box")
+      ? "상점 트랜잭션 함수가 없습니다. sql/create_shop_system.sql을 실행해 주세요."
+      : `상자 열기에 실패했습니다: ${error.message}`;
     return NextResponse.json({ ok: false, message: fallback }, { status: 500 });
   }
 
@@ -88,4 +87,3 @@ export async function POST(request: Request) {
     },
   });
 }
-

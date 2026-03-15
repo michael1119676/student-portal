@@ -287,13 +287,13 @@ begin
     limit 1;
   end if;
 
-  update public.box_inventory
+  update public.box_inventory as bi
   set
     remaining_quantity = remaining_quantity - 1,
     updated_at = now()
-  where product_id = v_selected.product_id
-    and remaining_quantity > 0
-  returning remaining_quantity + 1, remaining_quantity
+  where bi.product_id = v_selected.product_id
+    and bi.remaining_quantity > 0
+  returning bi.remaining_quantity + 1, bi.remaining_quantity
   into v_inventory_before, v_inventory_after;
 
   if v_inventory_before is null then
@@ -790,4 +790,3 @@ revoke all on public.draw_logs from anon, authenticated;
 revoke all on public.coin_ledger from anon, authenticated;
 revoke all on public.admin_action_logs from anon, authenticated;
 revoke all on public.exam_score_records from anon, authenticated;
-
