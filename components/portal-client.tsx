@@ -108,6 +108,56 @@ type SeasonCResponse = {
   message?: string;
 };
 
+type SeasonNRoundSummary = {
+  round: number;
+  averageScore: number;
+  myScore: number | null;
+};
+
+type SeasonNRoundDetail = {
+  round: number;
+  myScore: number | null;
+  averageScore: number;
+  myStdScore: number | null;
+  cut1: number | null;
+  cut2: number | null;
+  cut3: number | null;
+  histogram: Array<{
+    label: string;
+    count: number;
+  }>;
+  classStats: Array<{
+    className: string;
+    average: number;
+    median: number;
+    stdDev: number;
+    max: number;
+    min: number;
+    count: number;
+  }>;
+  questionStats: Array<{
+    question: number;
+    choices: Array<{
+      choice: number;
+      count: number;
+      rate: number;
+    }>;
+  }>;
+};
+
+type SeasonNResponse = {
+  ok: boolean;
+  season: "N";
+  maxRound: number;
+  yMax: number;
+  binSize: number;
+  data: {
+    rounds: SeasonNRoundSummary[];
+    details: SeasonNRoundDetail[];
+  };
+  message?: string;
+};
+
 type AdminStatsResponse = {
   ok: boolean;
   message?: string;
@@ -292,6 +342,12 @@ export default function PortalClient({
   const [seasonCLoading, setSeasonCLoading] = useState(false);
   const [seasonCError, setSeasonCError] = useState("");
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const [seasonNData, setSeasonNData] = useState<SeasonNResponse["data"] | null>(null);
+  const [seasonNLoading, setSeasonNLoading] = useState(false);
+  const [seasonNError, setSeasonNError] = useState("");
+  const [selectedNRound, setSelectedNRound] = useState<number | null>(null);
+  const [nCutInputs, setNCutInputs] = useState({ cut1: "", cut2: "", cut3: "" });
+  const [nCutSaveMessage, setNCutSaveMessage] = useState("");
   const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N">("C");
   const [statsRound, setStatsRound] = useState(1);
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
@@ -344,6 +400,25 @@ export default function PortalClient({
   );
 
   const smoothLinePath = useMemo(() => buildSmoothPath(myPlotPoints), [myPlotPoints]);
+
+  const selectedNRoundDetail = useMemo(() => {
+    if (!seasonNData || selectedNRound === null) return null;
+    return seasonNData.details.find((detail) => detail.round === selectedNRound) ?? null;
+  }, [seasonNData, selectedNRound]);
+
+  const nPlotPoints = useMemo(() => {
+    if (!seasonNData || seasonNData.rounds.length === 0) return [];
+    return seasonNData.rounds
+      .map((round, index, arr) => {
+        if (round.myScore === null) return null;
+        const x = ((index + 0.5) / arr.length) * 100;
+        const y = 100 - round.myScore * 2;
+        return { x, y };
+      })
+      .filter((point): point is { x: number; y: number } => point !== null);
+  }, [seasonNData]);
+
+  const nSmoothLinePath = useMemo(() => buildSmoothPath(nPlotPoints), [nPlotPoints]);
 
   function applyProfile(profileData?: StudentProfile | null) {
     setSelectedKorean(profileData?.korean_subject || "언어와 매체");
@@ -452,6 +527,101 @@ export default function PortalClient({
       cancelled = true;
     };
   }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode]);
+
+  useEffect(() => {
+    if (selectedSeason !== "N") return;
+    if (!canShowStudentPortal || !visibleUser?.id) return;
+
+    let cancelled = false;
+    const loadSeasonN = async () => {
+      setSeasonNLoading(true);
+      setSeasonNError("");
+      setNCutSaveMessage("");
+
+      const query = isAdminMode ? `?studentId=${encodeURIComponent(visibleUser.id)}` : "";
+
+      try {
+        const res = await fetch(`/api/season/n${query}`, { cache: "no-store" });
+        const data = (await res.json()) as SeasonNResponse;
+
+        if (!res.ok || !data.ok) {
+          if (!cancelled) {
+            setSeasonNError(data.message || "시즌 N 데이터를 불러오지 못했습니다.");
+            setSeasonNData(null);
+            setSelectedNRound(null);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setSeasonNData(data.data);
+          const defaultRound = data.data.rounds.find((r) => r.myScore !== null)?.round ?? 1;
+          setSelectedNRound(defaultRound);
+        }
+      } catch {
+        if (!cancelled) {
+          setSeasonNError("시즌 N 데이터를 불러오지 못했습니다.");
+          setSeasonNData(null);
+          setSelectedNRound(null);
+        }
+      } finally {
+        if (!cancelled) setSeasonNLoading(false);
+      }
+    };
+
+    loadSeasonN();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode]);
+
+  useEffect(() => {
+    if (!selectedNRoundDetail) return;
+    setNCutInputs({
+      cut1: selectedNRoundDetail.cut1 === null ? "" : String(selectedNRoundDetail.cut1),
+      cut2: selectedNRoundDetail.cut2 === null ? "" : String(selectedNRoundDetail.cut2),
+      cut3: selectedNRoundDetail.cut3 === null ? "" : String(selectedNRoundDetail.cut3),
+    });
+  }, [selectedNRoundDetail]);
+
+  async function handleSaveNCutoffs() {
+    if (!isAdminMode || !selectedNRound) return;
+    setNCutSaveMessage("");
+
+    const parseCut = (value: string) => {
+      const v = value.trim();
+      if (!v) return null;
+      const n = Number(v);
+      if (!Number.isFinite(n)) return null;
+      return Math.max(0, Math.min(100, Math.round(n)));
+    };
+
+    const res = await fetch("/api/admin/season-cutoffs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        season: "N",
+        round: selectedNRound,
+        cut1: parseCut(nCutInputs.cut1),
+        cut2: parseCut(nCutInputs.cut2),
+        cut3: parseCut(nCutInputs.cut3),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setNCutSaveMessage(data.message || "컷 저장 실패");
+      return;
+    }
+
+    setNCutSaveMessage("컷 저장 완료");
+
+    const query = isAdminMode && visibleUser?.id ? `?studentId=${encodeURIComponent(visibleUser.id)}` : "";
+    const refreshRes = await fetch(`/api/season/n${query}`, { cache: "no-store" });
+    const refreshData = (await refreshRes.json()) as SeasonNResponse;
+    if (refreshRes.ok && refreshData.ok) {
+      setSeasonNData(refreshData.data);
+    }
+  }
 
   useEffect(() => {
     if (!isAdminMode || adminStep !== "stats") return;
@@ -1951,6 +2121,354 @@ export default function PortalClient({
                               통계/점수 문의는 카카오톡 아이디 `jwlee2670` 또는
                               `010-3676-2670`으로 연락 주시면 빠르게 확인 후
                               안내드리겠습니다.
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          className="rounded-2xl bg-white text-black hover:bg-white/90"
+                          onClick={() => setSelectedSeason(null)}
+                        >
+                          시즌 다시 선택
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          onClick={handleLogout}
+                        >
+                          처음 화면으로
+                        </Button>
+                      </div>
+                    </div>
+                  ) : selectedSeason === "N" ? (
+                    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+                      <div className="self-start">
+                        <Button
+                          variant="secondary"
+                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          onClick={() => setSelectedSeason(null)}
+                        >
+                          시즌 선택으로 돌아가기
+                        </Button>
+                      </div>
+                      <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                        <CardHeader>
+                          <CardTitle className="text-3xl">Season N (1~12회)</CardTitle>
+                          <CardDescription className="text-white/55">
+                            회차를 누르면 해당 회차 통계를 확인할 수 있습니다. 회색
+                            막대는 평균, 빨간 점과 선은 내 점수입니다.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {seasonNLoading ? (
+                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
+                              시즌 N 데이터를 불러오는 중...
+                            </div>
+                          ) : seasonNError ? (
+                            <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-6 text-red-200">
+                              {seasonNError}
+                            </div>
+                          ) : seasonNData ? (
+                            <div className="space-y-6">
+                              <div className="relative overflow-x-auto">
+                                <div className="relative h-[390px] min-w-[780px] rounded-[1.5rem] border border-white/10 bg-black/20 px-6 py-6">
+                                  <div className="pointer-events-none absolute inset-x-6 top-6 bottom-14">
+                                    <div className="absolute inset-x-0 top-0 border-t border-white/10" />
+                                    <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
+                                    <div className="absolute inset-x-0 bottom-0 border-t border-white/20" />
+                                    <div className="absolute inset-y-0 left-0 border-l border-white/20" />
+                                  </div>
+
+                                  <div className="absolute left-0 top-5 w-10 text-right text-xs text-white/50 sm:w-12">
+                                    50
+                                  </div>
+                                  <div className="absolute left-0 top-[48%] w-10 -translate-y-1/2 text-right text-xs text-white/50 sm:w-12">
+                                    25
+                                  </div>
+                                  <div className="absolute left-0 bottom-11 w-10 text-right text-xs text-white/50 sm:w-12">
+                                    0
+                                  </div>
+
+                                  {nSmoothLinePath && (
+                                    <svg
+                                      viewBox="0 0 100 100"
+                                      className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
+                                      preserveAspectRatio="none"
+                                    >
+                                      <defs>
+                                        <filter id="nLineGlow" x="-40%" y="-40%" width="180%" height="180%">
+                                          <feGaussianBlur stdDeviation="1.6" />
+                                        </filter>
+                                      </defs>
+                                      <path
+                                        d={nSmoothLinePath}
+                                        fill="none"
+                                        stroke="#ef4444"
+                                        strokeOpacity="0.38"
+                                        strokeWidth="5.5"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        filter="url(#nLineGlow)"
+                                      />
+                                      <path
+                                        d={nSmoothLinePath}
+                                        fill="none"
+                                        stroke="#f4555a"
+                                        strokeWidth="2.4"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                      {nPlotPoints.map((point, index) => (
+                                        <circle
+                                          key={`n-point-${index}`}
+                                          cx={point.x}
+                                          cy={point.y}
+                                          r="2.05"
+                                          fill="#ffffff"
+                                          fillOpacity="0.85"
+                                        />
+                                      ))}
+                                      {nPlotPoints.map((point, index) => (
+                                        <circle
+                                          key={`n-point-core-${index}`}
+                                          cx={point.x}
+                                          cy={point.y}
+                                          r="1.3"
+                                          fill="#ef4444"
+                                        />
+                                      ))}
+                                    </svg>
+                                  )}
+
+                                  <div className="absolute left-12 right-6 top-6 bottom-14 grid grid-cols-12 gap-2">
+                                    {seasonNData.rounds.map((round) => {
+                                      const averageHeight = `${round.averageScore * 2}%`;
+                                      const isSelected = selectedNRound === round.round;
+                                      return (
+                                        <button
+                                          key={round.round}
+                                          type="button"
+                                          onClick={() => setSelectedNRound(round.round)}
+                                          className={`relative flex h-full items-end justify-center transition ${
+                                            isSelected ? "scale-[1.02]" : "opacity-90 hover:opacity-100"
+                                          }`}
+                                        >
+                                          <div
+                                            className={`w-7 rounded-t-xl bg-white/30 transition sm:w-8 ${
+                                              isSelected ? "ring-2 ring-sky-300/60" : ""
+                                            }`}
+                                            style={{ height: averageHeight }}
+                                          />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+
+                                  <div className="absolute left-12 right-6 bottom-4 grid grid-cols-12 gap-2">
+                                    {seasonNData.rounds.map((round) => (
+                                      <button
+                                        key={`n-label-${round.round}`}
+                                        type="button"
+                                        onClick={() => setSelectedNRound(round.round)}
+                                        className={`rounded-md py-1 text-center transition ${
+                                          selectedNRound === round.round
+                                            ? "bg-white/10"
+                                            : "hover:bg-white/5"
+                                        }`}
+                                      >
+                                        <p className="text-sm font-medium text-white/90">
+                                          {round.round}회
+                                        </p>
+                                        <p className="text-[11px] text-white/45">
+                                          평균 {round.averageScore}
+                                        </p>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {!seasonNData.rounds.some((round) => round.myScore !== null) && (
+                                <p className="text-sm text-amber-200/90">
+                                  현재 업로드된 N 시즌 응답에서 본인 데이터가 없어 빨간
+                                  점은 표시되지 않습니다.
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
+                              시즌 N 데이터가 없습니다.
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {selectedNRoundDetail && (
+                        <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                          <CardHeader>
+                            <CardTitle className="text-2xl">
+                              N시즌 {selectedNRoundDetail.round}회 상세 통계
+                            </CardTitle>
+                            <CardDescription className="text-white/55">
+                              내 점수, 비교(표준점수/컷), 반별 통계, 문항별 선지 선택률
+                              확인이 가능합니다.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-6">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">내 점수</p>
+                                <p className="mt-2 text-3xl font-semibold text-red-300">
+                                  {selectedNRoundDetail.myScore ?? "-"}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">평균 점수</p>
+                                <p className="mt-2 text-3xl font-semibold">
+                                  {selectedNRoundDetail.averageScore}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <p className="mb-3 text-sm text-white/55">비교</p>
+                              <div className="grid gap-3 sm:grid-cols-4">
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                  <p className="text-xs text-white/45">내 표준점수</p>
+                                  <p className="mt-1 text-2xl font-semibold text-sky-200">
+                                    {selectedNRoundDetail.myStdScore ?? "-"}
+                                  </p>
+                                </div>
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                  <p className="text-xs text-white/45">1컷</p>
+                                  <p className="mt-1 text-xl font-semibold">
+                                    {selectedNRoundDetail.cut1 ?? "-"}
+                                  </p>
+                                </div>
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                  <p className="text-xs text-white/45">2컷</p>
+                                  <p className="mt-1 text-xl font-semibold">
+                                    {selectedNRoundDetail.cut2 ?? "-"}
+                                  </p>
+                                </div>
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                  <p className="text-xs text-white/45">3컷</p>
+                                  <p className="mt-1 text-xl font-semibold">
+                                    {selectedNRoundDetail.cut3 ?? "-"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {isAdminMode && (
+                                <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
+                                  <p className="text-sm text-white/65">
+                                    관리자 전역 컷 수정 (모든 학생에 동일 적용)
+                                  </p>
+                                  <div className="grid gap-3 sm:grid-cols-3">
+                                    {(["cut1", "cut2", "cut3"] as const).map((key, idx) => (
+                                      <div key={key} className="space-y-1">
+                                        <Label className="text-white/70">{idx + 1}컷</Label>
+                                        <Input
+                                          value={nCutInputs[key]}
+                                          onChange={(e) =>
+                                            setNCutInputs((prev) => ({
+                                              ...prev,
+                                              [key]: e.target.value
+                                                .replace(/[^\d]/g, "")
+                                                .slice(0, 3),
+                                            }))
+                                          }
+                                          placeholder="0~100"
+                                          className="h-10 rounded-xl border-white/10 bg-black/30 text-white"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <Button
+                                      className="rounded-xl bg-white text-black hover:bg-white/90"
+                                      onClick={handleSaveNCutoffs}
+                                    >
+                                      컷 저장
+                                    </Button>
+                                    {nCutSaveMessage && (
+                                      <span className="text-sm text-white/65">
+                                        {nCutSaveMessage}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="grid gap-4 xl:grid-cols-2">
+                              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                                <div className="border-b border-white/10 px-4 py-3">
+                                  <p className="text-sm text-white/55">반별 통계</p>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full min-w-[440px] text-sm">
+                                    <thead className="text-white/55">
+                                      <tr>
+                                        <th className="px-4 py-3 text-left">반</th>
+                                        <th className="px-4 py-3 text-left">인원</th>
+                                        <th className="px-4 py-3 text-left">평균</th>
+                                        <th className="px-4 py-3 text-left">중앙값</th>
+                                        <th className="px-4 py-3 text-left">표준편차</th>
+                                        <th className="px-4 py-3 text-left">최고</th>
+                                        <th className="px-4 py-3 text-left">최저</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {selectedNRoundDetail.classStats.map((row) => (
+                                        <tr key={row.className} className="border-t border-white/10">
+                                          <td className="px-4 py-3">{row.className}</td>
+                                          <td className="px-4 py-3">{row.count}</td>
+                                          <td className="px-4 py-3">{row.average}</td>
+                                          <td className="px-4 py-3">{row.median}</td>
+                                          <td className="px-4 py-3">{row.stdDev}</td>
+                                          <td className="px-4 py-3">{row.max}</td>
+                                          <td className="px-4 py-3">{row.min}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+
+                              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                                <div className="border-b border-white/10 px-4 py-3">
+                                  <p className="text-sm text-white/55">문항별 선지 선택률</p>
+                                </div>
+                                <div className="max-h-[300px] overflow-auto">
+                                  <table className="w-full min-w-[500px] text-sm">
+                                    <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
+                                      <tr>
+                                        <th className="px-3 py-3 text-left">문항</th>
+                                        <th className="px-3 py-3 text-left">1</th>
+                                        <th className="px-3 py-3 text-left">2</th>
+                                        <th className="px-3 py-3 text-left">3</th>
+                                        <th className="px-3 py-3 text-left">4</th>
+                                        <th className="px-3 py-3 text-left">5</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {selectedNRoundDetail.questionStats.map((q) => (
+                                        <tr key={q.question} className="border-t border-white/10">
+                                          <td className="px-3 py-3">{q.question}번</td>
+                                          {q.choices.map((c) => (
+                                            <td key={c.choice} className="px-3 py-3">
+                                              {c.rate}%
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
                             </div>
                           </CardContent>
                         </Card>
