@@ -2048,14 +2048,26 @@ export default function PortalClient({
                                       className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
+                                      <defs>
+                                        <filter id="cScoreLineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                                          <feDropShadow
+                                            dx="0"
+                                            dy="1"
+                                            stdDeviation="1.1"
+                                            floodColor="#e25566"
+                                            floodOpacity="0.35"
+                                          />
+                                        </filter>
+                                      </defs>
                                       {smoothLinePath && (
                                         <path
                                           d={smoothLinePath}
                                           fill="none"
-                                          stroke="#ef4444"
-                                          strokeWidth="1.2"
+                                          stroke="#e25566"
+                                          strokeWidth="2"
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
+                                          filter="url(#cScoreLineGlow)"
                                         />
                                       )}
                                       {myPlotPoints.map((point, index) => (
@@ -2063,8 +2075,10 @@ export default function PortalClient({
                                           key={`my-point-${index}`}
                                           cx={point.x}
                                           cy={point.y}
-                                          fill="#ef4444"
-                                          r="1"
+                                          fill="#ffffff"
+                                          stroke="#e25566"
+                                          strokeWidth="1.2"
+                                          r="1.4"
                                         />
                                       ))}
                                     </svg>
@@ -2365,14 +2379,26 @@ export default function PortalClient({
                                       className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
+                                      <defs>
+                                        <filter id="nScoreLineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                                          <feDropShadow
+                                            dx="0"
+                                            dy="1"
+                                            stdDeviation="1.1"
+                                            floodColor="#e25566"
+                                            floodOpacity="0.35"
+                                          />
+                                        </filter>
+                                      </defs>
                                       {nSmoothLinePath && (
                                         <path
                                           d={nSmoothLinePath}
                                           fill="none"
-                                          stroke="#ef4444"
-                                          strokeWidth="1.2"
+                                          stroke="#e25566"
+                                          strokeWidth="2"
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
+                                          filter="url(#nScoreLineGlow)"
                                         />
                                       )}
                                       {nPlotPoints.map((point, index) => (
@@ -2380,8 +2406,10 @@ export default function PortalClient({
                                           key={`n-point-${index}`}
                                           cx={point.x}
                                           cy={point.y}
-                                          fill="#ef4444"
-                                          r="1"
+                                          fill="#ffffff"
+                                          stroke="#e25566"
+                                          strokeWidth="1.2"
+                                          r="1.4"
                                         />
                                       ))}
                                     </svg>
