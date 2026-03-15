@@ -18,6 +18,9 @@ function normalizePhone(phone: string) {
 }
 
 function buildFailedLoginMessage(remainingAttempts: number) {
+  if (remainingAttempts <= 0) {
+    return "로그인 정보가 일치하지 않습니다. 5회 실패 시 10분간 잠금됩니다.";
+  }
   return `로그인 정보가 일치하지 않습니다. 남은 로그인 시도 ${remainingAttempts}회. 5회 실패 시 10분간 잠금됩니다.`;
 }
 
@@ -78,10 +81,16 @@ export async function POST(request: Request) {
     const accountKey = buildAccountGuardKey(name, phone);
     const ipKey = buildIpGuardKey(clientIp);
 
-    const activeLock = await getActiveLoginLock(supabase, {
-      accountKey,
-      ipKey,
-    });
+    let activeLock: Awaited<ReturnType<typeof getActiveLoginLock>> = null;
+    try {
+      activeLock = await getActiveLoginLock(supabase, {
+        accountKey,
+        ipKey,
+      });
+    } catch (guardError) {
+      console.error("[login] login guard check failed:", guardError);
+      activeLock = null;
+    }
 
     if (activeLock) {
       return NextResponse.json(
@@ -125,14 +134,20 @@ export async function POST(request: Request) {
     }
 
     if (!student) {
-      const failure = await recordFailedLoginAttempt(supabase, {
-        accountKey,
-        ipKey,
-        studentId: null,
-        name,
-        phone,
-        ip: clientIp,
-      });
+      let failure: Awaited<ReturnType<typeof recordFailedLoginAttempt>>;
+      try {
+        failure = await recordFailedLoginAttempt(supabase, {
+          accountKey,
+          ipKey,
+          studentId: null,
+          name,
+          phone,
+          ip: clientIp,
+        });
+      } catch (guardError) {
+        console.error("[login] login guard record failed (missing student):", guardError);
+        failure = { lock: null, remainingAttempts: 0 };
+      }
 
       if (failure.lock) {
         return NextResponse.json(
@@ -161,14 +176,18 @@ export async function POST(request: Request) {
 
     if (!student.pin_hash) {
       console.error("[login] missing pin_hash for student:", student.id);
-      await recordFailedLoginAttempt(supabase, {
-        accountKey,
-        ipKey,
-        studentId: student.id,
-        name,
-        phone,
-        ip: clientIp,
-      });
+      try {
+        await recordFailedLoginAttempt(supabase, {
+          accountKey,
+          ipKey,
+          studentId: student.id,
+          name,
+          phone,
+          ip: clientIp,
+        });
+      } catch (guardError) {
+        console.error("[login] login guard record failed (missing pin_hash):", guardError);
+      }
       return NextResponse.json(
         { ok: false, message: "계정 초기화가 필요합니다. 관리자에게 문의하세요." },
         { status: 500 }
@@ -177,14 +196,20 @@ export async function POST(request: Request) {
 
     const ok = await bcrypt.compare(pin, student.pin_hash);
     if (!ok) {
-      const failure = await recordFailedLoginAttempt(supabase, {
-        accountKey,
-        ipKey,
-        studentId: student.id,
-        name,
-        phone,
-        ip: clientIp,
-      });
+      let failure: Awaited<ReturnType<typeof recordFailedLoginAttempt>>;
+      try {
+        failure = await recordFailedLoginAttempt(supabase, {
+          accountKey,
+          ipKey,
+          studentId: student.id,
+          name,
+          phone,
+          ip: clientIp,
+        });
+      } catch (guardError) {
+        console.error("[login] login guard record failed (wrong pin):", guardError);
+        failure = { lock: null, remainingAttempts: 0 };
+      }
 
       if (failure.lock) {
         return NextResponse.json(
@@ -211,10 +236,14 @@ export async function POST(request: Request) {
       );
     }
 
-    await clearLoginFailuresOnSuccess(supabase, {
-      accountKey,
-      ipKey,
-    });
+    try {
+      await clearLoginFailuresOnSuccess(supabase, {
+        accountKey,
+        ipKey,
+      });
+    } catch (guardError) {
+      console.error("[login] login guard clear failed:", guardError);
+    }
 
     const token = createSessionToken({
       id: student.id,

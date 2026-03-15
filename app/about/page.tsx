@@ -1,5 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { X } from "lucide-react";
 
 const teacherCareer = [
   "서울과학고등학교 졸업",
@@ -9,33 +13,55 @@ const teacherCareer = [
   "2025 수강생 60명",
 ];
 
-const reviewOriginals = [
+type PreviewItem = {
+  title: string;
+  src: string;
+};
+
+const reviewPreviews: PreviewItem[] = [
   {
-    title: "수강 후기 원문 1",
-    href: "/teacher/review-preview-1.png",
+    title: "수강 후기 1",
     src: "/teacher/review-preview-1.png",
   },
   {
-    title: "수강 후기 원문 2",
-    href: "/teacher/review-preview-2.png",
+    title: "수강 후기 2",
     src: "/teacher/review-preview-2.png",
   },
 ];
 
-const notePreviews = [
+const notePreviews: PreviewItem[] = [
   {
     title: "필기본 예시 1",
-    href: "/teacher/note-preview-1.png",
     src: "/teacher/note-preview-1.png",
   },
   {
     title: "필기본 예시 2",
-    href: "/teacher/note-preview-2.png",
     src: "/teacher/note-preview-2.png",
   },
 ];
 
 export default function AboutPage() {
+  const [selectedPreview, setSelectedPreview] = useState<PreviewItem | null>(null);
+
+  useEffect(() => {
+    if (!selectedPreview) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedPreview(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [selectedPreview]);
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.1),transparent_36%),#03050b] px-6 py-10 text-white sm:px-8">
       <div className="mx-auto w-full max-w-6xl space-y-8">
@@ -80,23 +106,20 @@ export default function AboutPage() {
               rel="noreferrer"
               className="inline-flex items-center rounded-xl border border-cyan-200/35 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/20"
             >
-              후기/필기본 원문 보기 (PDF)
+              후기/필기본 PDF 보기
             </a>
           </div>
 
           <div className="space-y-4">
             <div className="rounded-2xl border border-white/12 bg-black/20 p-4">
-              <p className="mb-3 text-sm font-semibold text-white/85">
-                수강 후기 원문 (요약 없음)
-              </p>
+              <p className="mb-3 text-sm font-semibold text-white/85">수강 후기</p>
               <div className="space-y-3">
-                {reviewOriginals.map((item) => (
-                  <a
+                {reviewPreviews.map((item) => (
+                  <button
                     key={item.title}
-                    href={item.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group block overflow-hidden rounded-xl border border-white/12 bg-black/20"
+                    type="button"
+                    onClick={() => setSelectedPreview(item)}
+                    className="group block w-full overflow-hidden rounded-xl border border-white/12 bg-black/20 text-left"
                   >
                     <Image
                       src={item.src}
@@ -106,7 +129,7 @@ export default function AboutPage() {
                       className="h-auto w-full object-cover transition duration-300 group-hover:scale-[1.01]"
                     />
                     <p className="px-3 py-2 text-xs text-white/70">{item.title}</p>
-                  </a>
+                  </button>
                 ))}
               </div>
             </div>
@@ -115,12 +138,11 @@ export default function AboutPage() {
               <p className="mb-3 text-sm font-semibold text-white/85">필기본 제공</p>
               <div className="grid grid-cols-2 gap-3">
                 {notePreviews.map((item) => (
-                  <a
+                  <button
                     key={item.title}
-                    href={item.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group overflow-hidden rounded-xl border border-white/12 bg-black/20"
+                    type="button"
+                    onClick={() => setSelectedPreview(item)}
+                    className="group w-full overflow-hidden rounded-xl border border-white/12 bg-black/20 text-left"
                   >
                     <Image
                       src={item.src}
@@ -130,13 +152,48 @@ export default function AboutPage() {
                       className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                     />
                     <p className="px-3 py-2 text-xs text-white/70">{item.title}</p>
-                  </a>
+                  </button>
                 ))}
               </div>
             </div>
           </div>
         </section>
       </div>
+
+      {selectedPreview && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 px-3 py-6 backdrop-blur-sm sm:px-8"
+          onClick={() => setSelectedPreview(null)}
+        >
+          <div className="mx-auto flex h-full w-full max-w-5xl flex-col">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm text-white/80">{selectedPreview.title}</p>
+              <button
+                type="button"
+                onClick={() => setSelectedPreview(null)}
+                className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs text-white/80 transition hover:bg-white/10"
+              >
+                닫기
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div
+              className="relative flex-1 overflow-hidden rounded-2xl border border-white/15 bg-[#0b0d12]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Image
+                src={selectedPreview.src}
+                alt={selectedPreview.title}
+                fill
+                sizes="100vw"
+                className="object-contain p-2"
+                priority
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

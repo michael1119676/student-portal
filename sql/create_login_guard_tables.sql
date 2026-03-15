@@ -39,3 +39,9 @@ create index if not exists idx_login_guard_events_created_at
 
 create index if not exists idx_login_guard_events_student_id
   on public.login_guard_events (student_id);
+
+alter table public.login_guard_state enable row level security;
+alter table public.login_guard_events enable row level security;
+
+revoke all on table public.login_guard_state from anon, authenticated;
+revoke all on table public.login_guard_events from anon, authenticated;
