@@ -232,7 +232,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   }, [boxes]);
 
   const tickerText = useMemo(() => {
-    if (feed.length === 0) return "아직 당첨 기록이 없습니다.";
+    if (feed.length === 0) return "아직 희귀 당첨 기록이 없습니다.";
     return feed
       .map((item) => `${item.maskedName} 학생 ${item.boxCode.toUpperCase()} 상자 ${item.productName} 당첨`)
       .join("   ✦   ");
@@ -246,8 +246,9 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
     setCoinBalance(Number(data.coinBalance ?? 0));
     setBoxes((data.boxes ?? []) as ShopBox[]);
-    setFeed((data.recentFeed ?? []) as FeedItem[]);
-    const latestId = Math.max(0, ...(data.recentFeed ?? []).map((item: FeedItem) => item.id));
+    const rareFeed = ((data.recentFeed ?? []) as FeedItem[]).filter((item) => item.isRare);
+    setFeed(rareFeed);
+    const latestId = Math.max(0, ...rareFeed.map((item) => item.id));
     lastFeedIdRef.current = Math.max(lastFeedIdRef.current, latestId);
   };
 
@@ -359,7 +360,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   useEffect(() => {
     const timer = window.setInterval(async () => {
       try {
-        const res = await fetch(`/api/shop/feed?limit=25&afterId=${lastFeedIdRef.current}`, {
+        const res = await fetch(`/api/shop/feed?limit=25&rareOnly=1&afterId=${lastFeedIdRef.current}`, {
           cache: "no-store",
         });
         const data = await res.json();
@@ -759,7 +760,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
-          <p className="mb-2 text-xs text-white/60">최근 당첨 내역</p>
+          <p className="mb-2 text-xs text-white/60">희귀 당첨 내역</p>
           <div className="overflow-hidden whitespace-nowrap rounded-xl border border-white/10 bg-black/30 py-2">
             <div className="marquee-track px-4 text-sm text-white/80">{`${tickerText}   ✦   ${tickerText}`}</div>
           </div>
