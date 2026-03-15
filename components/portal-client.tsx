@@ -1007,6 +1007,12 @@ export default function PortalClient({
 
   async function handleSaveProfile() {
     setSaveMessage("");
+    const nextPin = newPin.trim();
+
+    if (!isAdminMode && nextPin && !/^\d{4}$/.test(nextPin)) {
+      setSaveMessage("비밀번호는 숫자 4자리여야 합니다.");
+      return;
+    }
 
     const endpoint = isAdminMode ? "/api/admin/student-profile" : "/api/profile";
     const body = isAdminMode
@@ -1038,6 +1044,28 @@ export default function PortalClient({
 
     if (!res.ok) {
       setSaveMessage(data.message || "저장 실패");
+      return;
+    }
+
+    if (!isAdminMode && nextPin) {
+      const pinRes = await fetch("/api/change-pin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          newPin: nextPin,
+        }),
+      });
+
+      const pinData = await pinRes.json();
+      if (!pinRes.ok) {
+        setSaveMessage(pinData.message || "비밀번호 변경 실패");
+        return;
+      }
+
+      setNewPin("");
+      setSaveMessage("정보 저장 및 비밀번호 변경 완료");
       return;
     }
 
@@ -1092,30 +1120,6 @@ export default function PortalClient({
     }
 
     setSaveMessage("로그인 잠금/IP 제한을 해제했습니다.");
-  }
-
-  async function handleChangePin() {
-    setSaveMessage("");
-
-    const res = await fetch("/api/change-pin", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        newPin,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setSaveMessage(data.message || "비밀번호 변경 실패");
-      return;
-    }
-
-    setSaveMessage("비밀번호 변경 완료");
-    setNewPin("");
   }
 
   async function handleSelectStudent(student: ManagedStudent) {
@@ -2030,7 +2034,7 @@ export default function PortalClient({
                         {!isAdminMode && (
                           <div className="space-y-2">
                             <Label htmlFor="newPin" className="text-white/80">
-                              새 비밀번호 (숫자 4자리)
+                              새 비밀번호 (숫자 4자리, 선택 입력)
                             </Label>
                             <Input
                               id="newPin"
@@ -2042,6 +2046,9 @@ export default function PortalClient({
                               placeholder="예: 4821"
                               className="h-12 rounded-2xl border-white/10 bg-black/30 text-white placeholder:text-white/30"
                             />
+                            <p className="text-xs text-white/45">
+                              비밀번호를 비워두면 기존 비밀번호가 유지됩니다.
+                            </p>
                           </div>
                         )}
 
@@ -2087,17 +2094,6 @@ export default function PortalClient({
                               onClick={handleUnlockLoginGuard}
                             >
                               로그인 잠금 해제
-                            </Button>
-                          ) : null}
-
-                          {!isAdminMode ? (
-                            <Button
-                              variant="secondary"
-                              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                              onClick={handleChangePin}
-                              disabled={!/^\d{4}$/.test(newPin)}
-                            >
-                              비밀번호 변경
                             </Button>
                           ) : null}
 
