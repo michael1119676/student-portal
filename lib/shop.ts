@@ -30,6 +30,65 @@ export const SHOP_BOX_DEFAULTS: Record<ShopBoxCode, ShopBoxSeed> = {
 
 type RawExcelRow = Array<string | number | boolean | null | undefined>;
 
+const STATIC_SHOP_PRODUCTS: Array<{
+  boxCode: ShopBoxCode;
+  name: string;
+  quantity: number;
+}> = [
+  { boxCode: "bronze", name: "CU 마이쮸", quantity: 200000 },
+  { boxCode: "bronze", name: "코인 10개 추가", quantity: 2000 },
+  { boxCode: "bronze", name: "한국표준금거래소 24K 순금 골드바 0.1g", quantity: 1000 },
+  { boxCode: "bronze", name: "지금까지의 코인 개수 2배로", quantity: 200 },
+  { boxCode: "bronze", name: "지금까지의 코인 개수 5배로", quantity: 100 },
+  { boxCode: "silver", name: "CU 1,000원 기프트 카드", quantity: 10000 },
+  { boxCode: "silver", name: "CU 2,000원 기프트 카드", quantity: 6000 },
+  { boxCode: "silver", name: "CU 5,000원 기프트 카드", quantity: 3000 },
+  { boxCode: "silver", name: "CU 10,000원 기프트 카드", quantity: 1000 },
+  { boxCode: "gold", name: "CU 3,000원 기프트 카드", quantity: 6000 },
+  { boxCode: "gold", name: "베스킨라빈스 싱글레귤러", quantity: 4000 },
+  { boxCode: "gold", name: "스타벅스 아이스 아메리카노", quantity: 4000 },
+  { boxCode: "gold", name: "페로로 로쉐 T8", quantity: 3000 },
+  { boxCode: "gold", name: "굽네 오븐바사삭+콜라", quantity: 2000 },
+  { boxCode: "gold", name: "조말론 블랙베리 앤 베이 핸드크림", quantity: 1000 },
+  {
+    boxCode: "diamond",
+    name: "지인선 N제 Seoson2(공통+미적확통 하프 모의고사)",
+    quantity: 1000,
+  },
+  { boxCode: "diamond", name: "페레로로쉐 T16", quantity: 1000 },
+  { boxCode: "diamond", name: "CU 20,000원 기프트 카드", quantity: 600 },
+  { boxCode: "diamond", name: "골드 상자 3회 뽑기권", quantity: 400 },
+  { boxCode: "diamond", name: "베스킨라빈스 패밀리(5가지 맛)", quantity: 400 },
+  { boxCode: "diamond", name: "메이레 혼공 뽀모도로 타이머 무소음", quantity: 400 },
+  { boxCode: "diamond", name: "라미 사파리 볼펜(색상 선택 가능)", quantity: 350 },
+  {
+    boxCode: "diamond",
+    name: "할리데이 일반물리학, Principles of Physics, 스튜어트 미분적분학 중 1권",
+    quantity: 250,
+  },
+  {
+    boxCode: "diamond",
+    name: "연의 합격 26수능 샤프, 카의 합격 25수능 샤프 중 1개(재고 소진시 종료)",
+    quantity: 250,
+  },
+  { boxCode: "diamond", name: "포켓쉴 대용량 보조바태리 20000mAh 22.5W", quantity: 150 },
+  { boxCode: "diamond", name: "카오스 진자 키네틱아트 T형", quantity: 100 },
+  { boxCode: "diamond", name: "카오스 진자 키네틱아트 A형", quantity: 50 },
+  { boxCode: "diamond", name: "카오스 진자 키네틱아트 C형", quantity: 50 },
+  { boxCode: "diamond", name: "순은 그래뉼 10g", quantity: 75 },
+  {
+    boxCode: "diamond",
+    name: "한서준T와 오마카세 식사(한우, 스시, 양식 중 선택 가능)",
+    quantity: 40,
+  },
+  { boxCode: "diamond", name: "에어팟4 MXP63KH/A 화이트", quantity: 25 },
+  {
+    boxCode: "diamond",
+    name: "한국순금거래소 24K 순금 골드바 1g(학생 성함 각인 가능)",
+    quantity: 10,
+  },
+];
+
 function parseBoxMetaByHeader(header: string): Partial<ShopBoxSeed> & { code: ShopBoxCode } {
   const normalized = header.replace(/\s+/g, "");
   let code: ShopBoxCode = "bronze";
@@ -143,25 +202,18 @@ export function loadShopCatalogFromExcel() {
     path.join(process.cwd(), "data", "shop_diamond_box.xlsx");
 
   const files = [bsgPath, diamondPath];
-  for (const file of files) {
-    if (!fs.existsSync(file)) {
-      throw new Error(`엑셀 파일을 찾을 수 없습니다: ${file}`);
-    }
-  }
 
-  const parsedChunks = files.map((file) => parseProductsFromRows(parseSheetRows(file)));
+  const buildFromProducts = (
+    products: Array<Omit<ShopProductSeed, "baseProbabilityPercent" | "isRare">>,
+    boxOverrides?: Map<ShopBoxCode, Partial<ShopBoxSeed>>
+  ) => {
+    const mergedProducts = buildProbabilityAndRarity(products);
+    const boxesMap = new Map<ShopBoxCode, ShopBoxSeed>();
+    (Object.keys(SHOP_BOX_DEFAULTS) as ShopBoxCode[]).forEach((code) => {
+      boxesMap.set(code, SHOP_BOX_DEFAULTS[code]);
+    });
 
-  const mergedProducts = buildProbabilityAndRarity(
-    parsedChunks.flatMap((chunk) => chunk.products)
-  );
-
-  const boxesMap = new Map<ShopBoxCode, ShopBoxSeed>();
-  (Object.keys(SHOP_BOX_DEFAULTS) as ShopBoxCode[]).forEach((code) => {
-    boxesMap.set(code, SHOP_BOX_DEFAULTS[code]);
-  });
-
-  for (const chunk of parsedChunks) {
-    for (const [code, override] of chunk.boxOverrides.entries()) {
+    for (const [code, override] of boxOverrides?.entries() ?? []) {
       const base = boxesMap.get(code) ?? SHOP_BOX_DEFAULTS[code];
       boxesMap.set(code, {
         ...base,
@@ -169,17 +221,46 @@ export function loadShopCatalogFromExcel() {
         code,
       });
     }
-  }
 
-  const boxes = (["bronze", "silver", "gold", "diamond"] as ShopBoxCode[]).map(
-    (code) => boxesMap.get(code) ?? SHOP_BOX_DEFAULTS[code]
-  );
-
-  return {
-    boxes,
-    products: mergedProducts,
-    sourceFiles: files,
+    const boxes = (["bronze", "silver", "gold", "diamond"] as ShopBoxCode[]).map(
+      (code) => boxesMap.get(code) ?? SHOP_BOX_DEFAULTS[code]
+    );
+    return { boxes, products: mergedProducts };
   };
+
+  try {
+    for (const file of files) {
+      if (!fs.existsSync(file)) {
+        throw new Error(`엑셀 파일을 찾을 수 없습니다: ${file}`);
+      }
+    }
+    const parsedChunks = files.map((file) => parseProductsFromRows(parseSheetRows(file)));
+    const fromExcel = buildFromProducts(
+      parsedChunks.flatMap((chunk) => chunk.products),
+      new Map(parsedChunks.flatMap((chunk) => [...chunk.boxOverrides.entries()]))
+    );
+    return {
+      ...fromExcel,
+      sourceFiles: files,
+      sourceType: "excel" as const,
+    };
+  } catch {
+    const staticProducts: Array<Omit<ShopProductSeed, "baseProbabilityPercent" | "isRare">> =
+      STATIC_SHOP_PRODUCTS.map((item) => ({
+        boxCode: item.boxCode,
+        name: item.name,
+        quantity: item.quantity,
+        rewardCoinDelta: parseRewardCoinDelta(item.name),
+        rewardCoinMultiplier: parseRewardCoinMultiplier(item.name),
+      }));
+
+    const fromStatic = buildFromProducts(staticProducts);
+    return {
+      ...fromStatic,
+      sourceFiles: [],
+      sourceType: "static" as const,
+    };
+  }
 }
 
 export function maskStudentName(name: string) {
@@ -218,4 +299,3 @@ export function getNSeasonWeekRange(week: number) {
     labelKst: `${safeWeek}주차`,
   };
 }
-

@@ -62,6 +62,17 @@ export async function GET() {
     }
   }
 
+  if (safeBoxes.length === 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message:
+          "상점 초기 데이터가 비어 있습니다. 관리자 계정으로 상점 > 엑셀 기준 동기화를 1회 실행해 주세요.",
+      },
+      { status: 503 }
+    );
+  }
+
   const boxIds = safeBoxes.map((box) => box.id);
   let products: Array<{ id: string; box_id: string; is_active: boolean }> = [];
   if (boxIds.length > 0) {

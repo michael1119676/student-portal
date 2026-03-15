@@ -1390,7 +1390,7 @@ export default function PortalClient({
                       </p>
                     </div>
 
-                    <div className="mx-auto grid w-full max-w-6xl gap-5 md:grid-cols-3">
+                    <div className="mx-auto grid w-full max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-4">
                       <button
                         type="button"
                         onClick={() => setAdminStep("search")}
@@ -1454,6 +1454,29 @@ export default function PortalClient({
                             </CardTitle>
                             <CardDescription className="text-base text-white/50">
                               시즌/회차별 전체 통계와 반별 통계를 확인하고 PDF로 저장합니다.
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.location.href = "/shop";
+                        }}
+                        className="group text-left"
+                      >
+                        <Card className="h-full rounded-[2rem] border border-amber-200/25 bg-amber-400/10 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-amber-400/15">
+                          <CardHeader>
+                            <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-amber-300/20 text-amber-100 ring-1 ring-amber-200/30">
+                              <Gift className="h-6 w-6" />
+                            </div>
+                            <CardTitle className="flex items-center justify-between text-2xl">
+                              상점 관리
+                              <ArrowRight className="h-5 w-5 text-white/45 transition-transform duration-200 group-hover:translate-x-1" />
+                            </CardTitle>
+                            <CardDescription className="text-base text-white/50">
+                              상자 재고/학생 로그/주차별 당첨/코인 조정을 관리합니다.
                             </CardDescription>
                           </CardHeader>
                         </Card>
