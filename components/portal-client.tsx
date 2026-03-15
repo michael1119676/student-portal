@@ -309,6 +309,7 @@ function getTargetUniversity(value?: string | null) {
 
 function buildSmoothPath(points: Array<{ x: number; y: number }>) {
   if (points.length < 2) return "";
+  const tension = 0.22;
 
   let d = `M ${points[0].x} ${points[0].y}`;
   for (let i = 0; i < points.length - 1; i += 1) {
@@ -317,10 +318,10 @@ function buildSmoothPath(points: Array<{ x: number; y: number }>) {
     const p2 = points[i + 1];
     const p3 = points[i + 2] ?? p2;
 
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
 
     d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
   }
@@ -2052,10 +2053,10 @@ export default function PortalClient({
                                         <filter id="cScoreLineGlow" x="-20%" y="-20%" width="140%" height="140%">
                                           <feDropShadow
                                             dx="0"
-                                            dy="1"
-                                            stdDeviation="1.1"
+                                            dy="0.4"
+                                            stdDeviation="0.55"
                                             floodColor="#e25566"
-                                            floodOpacity="0.35"
+                                            floodOpacity="0.16"
                                           />
                                         </filter>
                                       </defs>
@@ -2077,8 +2078,8 @@ export default function PortalClient({
                                           cy={point.y}
                                           fill="#ffffff"
                                           stroke="#e25566"
-                                          strokeWidth="1.2"
-                                          r="1.4"
+                                          strokeWidth="0.8"
+                                          r="0.7"
                                         />
                                       ))}
                                     </svg>
@@ -2383,10 +2384,10 @@ export default function PortalClient({
                                         <filter id="nScoreLineGlow" x="-20%" y="-20%" width="140%" height="140%">
                                           <feDropShadow
                                             dx="0"
-                                            dy="1"
-                                            stdDeviation="1.1"
+                                            dy="0.4"
+                                            stdDeviation="0.55"
                                             floodColor="#e25566"
-                                            floodOpacity="0.35"
+                                            floodOpacity="0.16"
                                           />
                                         </filter>
                                       </defs>
@@ -2408,8 +2409,8 @@ export default function PortalClient({
                                           cy={point.y}
                                           fill="#ffffff"
                                           stroke="#e25566"
-                                          strokeWidth="1.2"
-                                          r="1.4"
+                                          strokeWidth="0.8"
+                                          r="0.7"
                                         />
                                       ))}
                                     </svg>
