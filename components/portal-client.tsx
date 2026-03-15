@@ -137,6 +137,9 @@ type SeasonNRoundDetail = {
   }>;
   questionStats: Array<{
     question: number;
+    correctChoice: number | null;
+    myChoice: number | null;
+    isWrong: boolean;
     choices: Array<{
       choice: number;
       count: number;
@@ -156,6 +159,19 @@ type SeasonNResponse = {
     details: SeasonNRoundDetail[];
   };
   message?: string;
+};
+
+type AdminSeasonCutoffsResponse = {
+  ok: boolean;
+  message?: string;
+  cutoffs?: Array<{
+    season: string;
+    round: number;
+    cut1: number | null;
+    cut2: number | null;
+    cut3: number | null;
+    updated_at?: string | null;
+  }>;
 };
 
 type AdminStatsResponse = {
@@ -265,6 +281,11 @@ function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
+function normalizeClassNameLabel(className: string | null | undefined) {
+  if (!className) return className;
+  return className.trim() === "영상반" ? "녹화강의반" : className;
+}
+
 function ScriptLogo() {
   return (
     <div className="relative inline-block">
@@ -346,8 +367,11 @@ export default function PortalClient({
   const [seasonNLoading, setSeasonNLoading] = useState(false);
   const [seasonNError, setSeasonNError] = useState("");
   const [selectedNRound, setSelectedNRound] = useState<number | null>(null);
+  const [adminCutSeason, setAdminCutSeason] = useState<"N" | "M" | null>(null);
+  const [adminNInputRound, setAdminNInputRound] = useState(1);
   const [nCutInputs, setNCutInputs] = useState({ cut1: "", cut2: "", cut3: "" });
   const [nCutSaveMessage, setNCutSaveMessage] = useState("");
+  const [nCutLoading, setNCutLoading] = useState(false);
   const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N">("C");
   const [statsRound, setStatsRound] = useState(1);
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
@@ -584,8 +608,57 @@ export default function PortalClient({
     });
   }, [selectedNRoundDetail]);
 
+  useEffect(() => {
+    if (!isAdminMode || adminStep !== "scores" || !adminCutSeason) return;
+
+    let cancelled = false;
+
+    const loadNCutoffsForRound = async () => {
+      setNCutLoading(true);
+      setNCutSaveMessage("");
+      try {
+        const res = await fetch(
+          `/api/admin/season-cutoffs?season=${adminCutSeason}&round=${adminNInputRound}`,
+          { cache: "no-store" }
+        );
+        const data = (await res.json()) as AdminSeasonCutoffsResponse;
+        if (!res.ok || !data.ok) {
+          if (!cancelled) {
+            setNCutSaveMessage(data.message || "컷 정보를 불러오지 못했습니다.");
+          }
+          return;
+        }
+
+        const row = data.cutoffs?.[0] ?? null;
+        if (!cancelled) {
+          setNCutInputs({
+            cut1: row?.cut1 === null || row?.cut1 === undefined ? "" : String(row.cut1),
+            cut2: row?.cut2 === null || row?.cut2 === undefined ? "" : String(row.cut2),
+            cut3: row?.cut3 === null || row?.cut3 === undefined ? "" : String(row.cut3),
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setNCutSaveMessage("컷 정보를 불러오지 못했습니다.");
+        }
+      } finally {
+        if (!cancelled) {
+          setNCutLoading(false);
+        }
+      }
+    };
+
+    loadNCutoffsForRound();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminMode, adminStep, adminCutSeason, adminNInputRound]);
+
   async function handleSaveNCutoffs() {
-    if (!isAdminMode || !selectedNRound) return;
+    if (!isAdminMode || !adminCutSeason) return;
+    const targetRound = adminStep === "scores" ? adminNInputRound : selectedNRound;
+    if (!targetRound) return;
     setNCutSaveMessage("");
 
     const parseCut = (value: string) => {
@@ -600,8 +673,8 @@ export default function PortalClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        season: "N",
-        round: selectedNRound,
+        season: adminCutSeason,
+        round: targetRound,
         cut1: parseCut(nCutInputs.cut1),
         cut2: parseCut(nCutInputs.cut2),
         cut3: parseCut(nCutInputs.cut3),
@@ -614,6 +687,10 @@ export default function PortalClient({
     }
 
     setNCutSaveMessage("컷 저장 완료");
+
+    if (adminStep === "scores") {
+      return;
+    }
 
     const query = isAdminMode && visibleUser?.id ? `?studentId=${encodeURIComponent(visibleUser.id)}` : "";
     const refreshRes = await fetch(`/api/season/n${query}`, { cache: "no-store" });
@@ -1179,7 +1256,11 @@ export default function PortalClient({
 
                       <button
                         type="button"
-                        onClick={() => setAdminStep("scores")}
+                        onClick={() => {
+                          setAdminStep("scores");
+                          setAdminCutSeason(null);
+                          setNCutSaveMessage("");
+                        }}
                         className="group text-left"
                       >
                         <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
@@ -1192,8 +1273,7 @@ export default function PortalClient({
                               <ArrowRight className="h-5 w-5 text-white/45 transition-transform duration-200 group-hover:translate-x-1" />
                             </CardTitle>
                             <CardDescription className="text-base text-white/50">
-                              시즌 M/N의 예상 1컷, 2컷, 3컷, 만점 표점 입력 기능으로
-                              연결될 예정입니다.
+                              시즌 선택 후 회차별 1컷, 2컷, 3컷을 입력합니다.
                             </CardDescription>
                           </CardHeader>
                         </Card>
@@ -1227,24 +1307,142 @@ export default function PortalClient({
                       <CardHeader>
                         <CardTitle className="text-3xl">점수 입력하기</CardTitle>
                         <CardDescription className="text-white/55">
-                          시즌 M/N 관리자 입력 기능은 업데이트 예정입니다.
+                          시즌을 선택한 뒤 회차별 전역 컷을 입력합니다.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-6 text-white/70">
-                          추후 입력 예정 항목:
-                          <br />
-                          예상 1컷, 예상 2컷, 예상 3컷, 예상 만점 표준점수
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                          <Button
-                            variant="secondary"
-                            className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                            onClick={() => setAdminStep("home")}
-                          >
-                            관리자 홈
-                          </Button>
-                        </div>
+                        {!adminCutSeason ? (
+                          <div className="space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <Button
+                                className="h-14 rounded-2xl bg-white text-black hover:bg-white/90"
+                                onClick={() => {
+                                  setAdminCutSeason("N");
+                                  setAdminNInputRound(1);
+                                }}
+                              >
+                                시즌 N
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                className="h-14 rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                                onClick={() => {
+                                  setAdminCutSeason("M");
+                                  setAdminNInputRound(1);
+                                }}
+                              >
+                                시즌 M
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                              <Button
+                                variant="secondary"
+                                className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                                onClick={() => setAdminStep("home")}
+                              >
+                                관리자 홈
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm text-white/70">
+                                선택 시즌: <span className="font-semibold">Season {adminCutSeason}</span>
+                              </p>
+                              <Button
+                                variant="secondary"
+                                className="rounded-xl bg-white/10 text-white hover:bg-white/20"
+                                onClick={() => {
+                                  setAdminCutSeason(null);
+                                  setNCutSaveMessage("");
+                                }}
+                              >
+                                시즌 다시 선택
+                              </Button>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-4">
+                              <div className="space-y-2 sm:col-span-1">
+                                <Label className="text-white/75">회차</Label>
+                                <select
+                                  value={adminNInputRound}
+                                  onChange={(e) => setAdminNInputRound(Number(e.target.value))}
+                                  className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                                >
+                                  {Array.from({ length: 12 }, (_, i) => i + 1).map((round) => (
+                                    <option key={`cut-round-${round}`} value={round}>
+                                      {round}회
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-white/75">1컷</Label>
+                                <Input
+                                  value={nCutInputs.cut1}
+                                  onChange={(e) =>
+                                    setNCutInputs((prev) => ({
+                                      ...prev,
+                                      cut1: e.target.value.replace(/[^\d]/g, "").slice(0, 3),
+                                    }))
+                                  }
+                                  placeholder="0~100"
+                                  className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-white/75">2컷</Label>
+                                <Input
+                                  value={nCutInputs.cut2}
+                                  onChange={(e) =>
+                                    setNCutInputs((prev) => ({
+                                      ...prev,
+                                      cut2: e.target.value.replace(/[^\d]/g, "").slice(0, 3),
+                                    }))
+                                  }
+                                  placeholder="0~100"
+                                  className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-white/75">3컷</Label>
+                                <Input
+                                  value={nCutInputs.cut3}
+                                  onChange={(e) =>
+                                    setNCutInputs((prev) => ({
+                                      ...prev,
+                                      cut3: e.target.value.replace(/[^\d]/g, "").slice(0, 3),
+                                    }))
+                                  }
+                                  placeholder="0~100"
+                                  className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
+                                />
+                              </div>
+                            </div>
+                            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65">
+                              저장 위치: Season {adminCutSeason} {adminNInputRound}회 전역 컷
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                              <Button
+                                className="rounded-2xl bg-white text-black hover:bg-white/90"
+                                onClick={handleSaveNCutoffs}
+                                disabled={nCutLoading}
+                              >
+                                {nCutLoading ? "불러오는 중..." : "컷 저장"}
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                                onClick={() => setAdminStep("home")}
+                              >
+                                관리자 홈
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                        {nCutSaveMessage && (
+                          <p className="text-sm text-white/65">{nCutSaveMessage}</p>
+                        )}
                       </CardContent>
                     </Card>
                   </div>
@@ -1468,7 +1666,9 @@ export default function PortalClient({
                                   <p className="text-lg font-semibold">{student.name}</p>
                                   <p className="text-sm text-white/55">
                                     {student.phone}
-                                    {student.className ? ` · ${student.className}` : ""}
+                                    {student.className
+                                      ? ` · ${normalizeClassNameLabel(student.className)}`
+                                      : ""}
                                   </p>
                                 </div>
                                 <ArrowRight className="h-5 w-5 text-white/40" />
@@ -2360,47 +2560,6 @@ export default function PortalClient({
                                   </p>
                                 </div>
                               </div>
-
-                              {isAdminMode && (
-                                <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
-                                  <p className="text-sm text-white/65">
-                                    관리자 전역 컷 수정 (모든 학생에 동일 적용)
-                                  </p>
-                                  <div className="grid gap-3 sm:grid-cols-3">
-                                    {(["cut1", "cut2", "cut3"] as const).map((key, idx) => (
-                                      <div key={key} className="space-y-1">
-                                        <Label className="text-white/70">{idx + 1}컷</Label>
-                                        <Input
-                                          value={nCutInputs[key]}
-                                          onChange={(e) =>
-                                            setNCutInputs((prev) => ({
-                                              ...prev,
-                                              [key]: e.target.value
-                                                .replace(/[^\d]/g, "")
-                                                .slice(0, 3),
-                                            }))
-                                          }
-                                          placeholder="0~100"
-                                          className="h-10 rounded-xl border-white/10 bg-black/30 text-white"
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    <Button
-                                      className="rounded-xl bg-white text-black hover:bg-white/90"
-                                      onClick={handleSaveNCutoffs}
-                                    >
-                                      컷 저장
-                                    </Button>
-                                    {nCutSaveMessage && (
-                                      <span className="text-sm text-white/65">
-                                        {nCutSaveMessage}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
                             </div>
 
                             <div className="grid gap-4 xl:grid-cols-2">
@@ -2440,13 +2599,17 @@ export default function PortalClient({
 
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                                 <div className="border-b border-white/10 px-4 py-3">
-                                  <p className="text-sm text-white/55">문항별 선지 선택률</p>
+                                  <p className="text-sm text-white/55">
+                                    문항별 선지 선택률 (정답/내답 포함, 스크롤 가능)
+                                  </p>
                                 </div>
                                 <div className="max-h-[300px] overflow-auto">
-                                  <table className="w-full min-w-[500px] text-sm">
+                                  <table className="w-full min-w-[560px] text-sm">
                                     <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
                                       <tr>
                                         <th className="px-3 py-3 text-left">문항</th>
+                                        <th className="px-3 py-3 text-left">정답</th>
+                                        <th className="px-3 py-3 text-left">내답</th>
                                         <th className="px-3 py-3 text-left">1</th>
                                         <th className="px-3 py-3 text-left">2</th>
                                         <th className="px-3 py-3 text-left">3</th>
@@ -2455,12 +2618,36 @@ export default function PortalClient({
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {selectedNRoundDetail.questionStats.map((q) => (
-                                        <tr key={q.question} className="border-t border-white/10">
-                                          <td className="px-3 py-3">{q.question}번</td>
-                                          {q.choices.map((c) => (
-                                            <td key={c.choice} className="px-3 py-3">
-                                              {c.rate}%
+                                      {selectedNRoundDetail.questionStats.map((question) => (
+                                        <tr
+                                          key={question.question}
+                                          className={`border-t border-white/10 ${
+                                            question.isWrong ? "bg-red-500/10" : ""
+                                          }`}
+                                        >
+                                          <td className="px-3 py-3">{question.question}번</td>
+                                          <td className="px-3 py-3 text-emerald-300">
+                                            {question.correctChoice ?? "-"}
+                                          </td>
+                                          <td
+                                            className={`px-3 py-3 ${
+                                              question.isWrong
+                                                ? "font-semibold text-red-200"
+                                                : "text-white/80"
+                                            }`}
+                                          >
+                                            {question.myChoice ?? "-"}
+                                          </td>
+                                          {question.choices.map((choice) => (
+                                            <td
+                                              key={choice.choice}
+                                              className={`px-3 py-3 ${
+                                                choice.choice === question.correctChoice
+                                                  ? "font-semibold text-emerald-300"
+                                                  : ""
+                                              }`}
+                                            >
+                                              {choice.rate}%
                                             </td>
                                           ))}
                                         </tr>
@@ -2469,6 +2656,13 @@ export default function PortalClient({
                                   </table>
                                 </div>
                               </div>
+                            </div>
+                            <p className="text-xs text-white/50">
+                              빨간 줄은 내 오답 문항, 초록색은 정답 번호입니다.
+                            </p>
+                            <div className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                              통계/점수 문의는 카카오톡 아이디 `jwlee2670` 또는
+                              `010-3676-2670`으로 연락 주세요.
                             </div>
                           </CardContent>
                         </Card>

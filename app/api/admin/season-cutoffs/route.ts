@@ -33,6 +33,54 @@ async function requireAdmin() {
   return user;
 }
 
+export async function GET(request: Request) {
+  const user = await requireAdmin();
+  if (!user) {
+    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const season = normalizeSeason(url.searchParams.get("season"));
+  const roundParam = url.searchParams.get("round");
+  const round = roundParam ? normalizeRound(roundParam) : null;
+
+  if (!season) {
+    return NextResponse.json(
+      { ok: false, message: "시즌 정보가 올바르지 않습니다." },
+      { status: 400 }
+    );
+  }
+
+  if (roundParam && round === null) {
+    return NextResponse.json(
+      { ok: false, message: "회차 정보가 올바르지 않습니다." },
+      { status: 400 }
+    );
+  }
+
+  const supabase = createAdminClient();
+  let query = supabase
+    .from("season_cutoffs")
+    .select("season, round, cut1, cut2, cut3, updated_at")
+    .eq("season", season)
+    .order("round", { ascending: true });
+
+  if (round !== null) {
+    query = query.eq("round", round);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return NextResponse.json(
+      { ok: false, message: "컷 조회에 실패했습니다." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ ok: true, cutoffs: data ?? [] });
+}
+
 export async function POST(request: Request) {
   const user = await requireAdmin();
   if (!user) {

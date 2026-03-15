@@ -120,6 +120,12 @@ const ROUND_COUNT = 10;
 const MAX_SCORE = 100;
 const BIN_SIZE = 10;
 
+function normalizeDisplayClassName(value: string) {
+  const normalized = String(value || "").trim();
+  if (normalized === "영상반") return "녹화강의반";
+  return normalized || "미분류";
+}
+
 function toOneDecimal(value: number) {
   return Math.round(value * 10) / 10;
 }
@@ -224,7 +230,7 @@ function buildRoundRows(
     result.push({
       studentId: matched.id,
       name: matched.name,
-      className: row.className || matched.class_name || "미분류",
+      className: normalizeDisplayClassName(row.className || matched.class_name || "미분류"),
       score: scoreFromSheet ?? scoreFromAnswers(round, answers),
       answers,
     });

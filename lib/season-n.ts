@@ -77,7 +77,9 @@ export type SeasonNViewData = {
 };
 
 const ROUND_COUNT = 12;
-const ANSWER_KEYS: Record<number, number[]> = {};
+const ANSWER_KEYS: Record<number, number[]> = {
+  1: "23521145354245243333".split("").map(Number),
+};
 
 function normalizeDisplayClassName(value: string) {
   const normalized = String(value || "").trim();
