@@ -164,7 +164,7 @@ begin
 
   update public.box_inventory as bi
   set
-    remaining_quantity = remaining_quantity - 1,
+    remaining_quantity = bi.remaining_quantity - 1,
     updated_at = now()
   where bi.product_id = v_selected.product_id
     and bi.remaining_quantity > 0
@@ -277,4 +277,3 @@ begin
       coalesce(v_selected.is_rare, false);
 end;
 $$;
-
