@@ -279,24 +279,9 @@ const quickLinks = [
   {
     title: "About Han Seojun T",
     description: "한서준 T 소개 화면 보기",
-    href: "#teacher",
+    href: "/about",
     icon: GraduationCap,
   },
-];
-
-const teacherCareer = [
-  "서울과학고등학교 졸업",
-  "가톨릭대학교 의예과 25학번 정시 입학",
-  "연세대 의대 정시 합격",
-  "23수능 물리1, 24~26수능 물리2 만점",
-  "2025 수강생 60명",
-];
-
-const teacherReviewHighlights = [
-  "강의 전달력과 손필기 퀄리티가 높아 강의만으로도 1등급에 가까워졌다는 후기가 반복됩니다.",
-  "작년에 안 보이던 풀이가 보이고, 킬러 문항 접근이 정리되었다는 의견이 많습니다.",
-  "개념과 암기 파트를 분리해 설명해줘서 공부 방향이 선명해졌다는 피드백이 있습니다.",
-  "질문 응답이 빠르고 디테일해서 실수 교정에 큰 도움이 되었다는 후기가 확인됩니다.",
 ];
 
 function normalizePhone(phone: string) {
@@ -1084,6 +1069,31 @@ export default function PortalClient({
     setSaveMessage("학생 비밀번호를 1111로 초기화했습니다.");
   }
 
+  async function handleUnlockLoginGuard() {
+    if (!selectedStudent) return;
+
+    setSaveMessage("");
+
+    const res = await fetch("/api/admin/unlock-login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        studentId: selectedStudent.id,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setSaveMessage(data.message || "로그인 잠금 해제 실패");
+      return;
+    }
+
+    setSaveMessage("로그인 잠금/IP 제한을 해제했습니다.");
+  }
+
   async function handleChangePin() {
     setSaveMessage("");
 
@@ -1351,95 +1361,6 @@ export default function PortalClient({
 	                  </div>
 	                </div>
 
-	                <section id="teacher" className="lg:col-span-2 mt-2">
-	                  <div className="overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.12),transparent_38%),rgba(10,12,18,0.9)] p-6 sm:p-8">
-	                    <div className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-	                      <div className="space-y-5">
-	                        <div className="space-y-2">
-	                          <p className="text-xs uppercase tracking-[0.25em] text-cyan-200/75">
-	                            Instructor Profile
-	                          </p>
-	                          <h3 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-	                            한서준 T 강사 소개
-	                          </h3>
-	                          <p className="text-sm leading-7 text-white/70 sm:text-base">
-	                            물리2에서 필요한 개념 정리, 실전 스킬, 손필기 풀이를 한 흐름으로
-	                            연결해 주는 수업을 목표로 합니다.
-	                          </p>
-	                        </div>
-
-	                        <div className="grid gap-2">
-	                          {teacherCareer.map((item) => (
-	                            <div
-	                              key={item}
-	                              className="rounded-xl border border-white/12 bg-black/20 px-4 py-2.5 text-sm text-white/88"
-	                            >
-	                              {item}
-	                            </div>
-	                          ))}
-	                        </div>
-
-	                        <a
-	                          href="/teacher/review-notes.pdf"
-	                          target="_blank"
-	                          rel="noreferrer"
-	                          className="inline-flex items-center rounded-xl border border-cyan-200/35 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/20"
-	                        >
-	                          후기/필기본 원문 보기 (PDF)
-	                        </a>
-	                      </div>
-
-	                      <div className="space-y-4">
-	                        <div className="rounded-2xl border border-white/12 bg-black/20 p-4">
-	                          <p className="mb-3 text-sm font-semibold text-white/85">수강 후기 요약</p>
-	                          <div className="space-y-2.5">
-	                            {teacherReviewHighlights.map((item) => (
-	                              <p
-	                                key={item}
-	                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm leading-6 text-white/80"
-	                              >
-	                                {item}
-	                              </p>
-	                            ))}
-	                          </div>
-	                        </div>
-
-	                        <div className="grid grid-cols-2 gap-3">
-	                          <a
-	                            href="/teacher/note-preview-1.png"
-	                            target="_blank"
-	                            rel="noreferrer"
-	                            className="group overflow-hidden rounded-xl border border-white/12 bg-black/20"
-	                          >
-	                            <Image
-	                              src="/teacher/note-preview-1.png"
-	                              alt="한서준 T 필기본 예시 1"
-	                              width={420}
-	                              height={420}
-	                              className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-	                            />
-	                            <p className="px-3 py-2 text-xs text-white/70">필기본 예시 1</p>
-	                          </a>
-	                          <a
-	                            href="/teacher/note-preview-2.png"
-	                            target="_blank"
-	                            rel="noreferrer"
-	                            className="group overflow-hidden rounded-xl border border-white/12 bg-black/20"
-	                          >
-	                            <Image
-	                              src="/teacher/note-preview-2.png"
-	                              alt="한서준 T 필기본 예시 2"
-	                              width={420}
-	                              height={420}
-	                              className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-	                            />
-	                            <p className="px-3 py-2 text-xs text-white/70">필기본 예시 2</p>
-	                          </a>
-	                        </div>
-	                      </div>
-	                    </div>
-	                  </div>
-	                </section>
 	              </motion.div>
 	            ) : isAdminMode && !selectedStudent ? (
               <motion.div
@@ -1956,7 +1877,7 @@ export default function PortalClient({
                           <CardDescription className="mt-2 text-white/55">
                             이름과 전화번호는 고정입니다.
                             {isAdminMode
-                              ? " 관리자는 학생의 선택과목 / 희망 대학을 수정하고 비밀번호를 1111로 초기화할 수 있습니다."
+                              ? " 관리자는 학생의 선택과목 / 희망 대학 수정, 비밀번호 1111 초기화, 로그인 잠금 해제를 할 수 있습니다."
                               : " 선택과목 / 희망 대학 / 비밀번호만 수정할 수 있습니다."}
                           </CardDescription>
                         </div>
@@ -2156,6 +2077,16 @@ export default function PortalClient({
                               onClick={handleResetStudentPin}
                             >
                               비밀번호 1111로 초기화
+                            </Button>
+                          ) : null}
+
+                          {isAdminMode ? (
+                            <Button
+                              variant="secondary"
+                              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                              onClick={handleUnlockLoginGuard}
+                            >
+                              로그인 잠금 해제
                             </Button>
                           ) : null}
 

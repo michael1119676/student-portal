@@ -1,10 +1,14 @@
 import bcrypt from "bcrypt";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { rejectIfCrossOrigin } from "@/lib/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export async function POST(request: Request) {
+  const originError = rejectIfCrossOrigin(request);
+  if (originError) return originError;
+
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   const user = verifySessionToken(token);
@@ -37,7 +41,11 @@ export async function POST(request: Request) {
     .eq("role", "student");
 
   if (error) {
-    return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+    console.error("[admin/reset-pin] failed to reset pin:", error.message);
+    return NextResponse.json(
+      { ok: false, message: "비밀번호 초기화에 실패했습니다." },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true });

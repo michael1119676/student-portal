@@ -1,14 +1,24 @@
 import bcrypt from "bcrypt";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  createSessionToken,
-  SESSION_COOKIE_NAME,
-} from "@/lib/session";
+  buildAccountGuardKey,
+  buildIpGuardKey,
+  clearLoginFailuresOnSuccess,
+  formatRetryAfterMessage,
+  getActiveLoginLock,
+  recordFailedLoginAttempt,
+} from "@/lib/login-guard";
+import { getClientIp, rejectIfCrossOrigin } from "@/lib/security";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/session";
 
 function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
+}
+
+function buildFailedLoginMessage(remainingAttempts: number) {
+  return `로그인 정보가 일치하지 않습니다. 남은 로그인 시도 ${remainingAttempts}회. 5회 실패 시 10분간 잠금됩니다.`;
 }
 
 function getMissingEnvVars() {
@@ -23,19 +33,35 @@ function getMissingEnvVars() {
 
 export async function POST(request: Request) {
   try {
+    const originError = rejectIfCrossOrigin(request);
+    if (originError) return originError;
+
     const missingEnv = getMissingEnvVars();
     if (missingEnv.length > 0) {
       console.error("[login] missing environment variables:", missingEnv.join(", "));
       return NextResponse.json(
         {
           ok: false,
-          message: `서버 환경변수 설정 오류: ${missingEnv.join(", ")}`,
+          message: "서버 설정 오류로 로그인에 실패했습니다.",
         },
         { status: 500 }
       );
     }
 
-    const body = await request.json();
+    let body: Record<string, unknown>;
+    try {
+      const parsed = await request.json();
+      body =
+        typeof parsed === "object" && parsed !== null
+          ? (parsed as Record<string, unknown>)
+          : {};
+    } catch {
+      return NextResponse.json(
+        { ok: false, message: "요청 형식이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
+
     const name = String(body?.name || "").trim();
     const phone = normalizePhone(String(body?.phone || ""));
     const pin = String(body?.pin || "").trim();
@@ -48,21 +74,44 @@ export async function POST(request: Request) {
     }
 
     const supabase = createAdminClient();
+    const clientIp = getClientIp(request);
+    const accountKey = buildAccountGuardKey(name, phone);
+    const ipKey = buildIpGuardKey(clientIp);
+
+    const activeLock = await getActiveLoginLock(supabase, {
+      accountKey,
+      ipKey,
+    });
+
+    if (activeLock) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: formatRetryAfterMessage(activeLock.retryAfterSeconds),
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(activeLock.retryAfterSeconds),
+          },
+        }
+      );
+    }
 
     const { data: student, error } = await supabase
       .from("students")
       .select(`
-    id,
-    name,
-    phone,
-    role,
-    pin_hash,
-    korean_subject,
-    math_subject,
-    science_1,
-    science_2,
-    target_university
-        `)
+        id,
+        name,
+        phone,
+        role,
+        pin_hash,
+        korean_subject,
+        math_subject,
+        science_1,
+        science_2,
+        target_university
+      `)
       .eq("name", name)
       .eq("phone", phone)
       .maybeSingle();
@@ -76,14 +125,50 @@ export async function POST(request: Request) {
     }
 
     if (!student) {
+      const failure = await recordFailedLoginAttempt(supabase, {
+        accountKey,
+        ipKey,
+        studentId: null,
+        name,
+        phone,
+        ip: clientIp,
+      });
+
+      if (failure.lock) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message: formatRetryAfterMessage(failure.lock.retryAfterSeconds),
+          },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(failure.lock.retryAfterSeconds),
+            },
+          }
+        );
+      }
+
       return NextResponse.json(
-        { ok: false, message: "로그인 정보가 일치하지 않습니다." },
+        {
+          ok: false,
+          remainingAttempts: failure.remainingAttempts,
+          message: buildFailedLoginMessage(failure.remainingAttempts),
+        },
         { status: 401 }
       );
     }
 
     if (!student.pin_hash) {
       console.error("[login] missing pin_hash for student:", student.id);
+      await recordFailedLoginAttempt(supabase, {
+        accountKey,
+        ipKey,
+        studentId: student.id,
+        name,
+        phone,
+        ip: clientIp,
+      });
       return NextResponse.json(
         { ok: false, message: "계정 초기화가 필요합니다. 관리자에게 문의하세요." },
         { status: 500 }
@@ -92,11 +177,44 @@ export async function POST(request: Request) {
 
     const ok = await bcrypt.compare(pin, student.pin_hash);
     if (!ok) {
+      const failure = await recordFailedLoginAttempt(supabase, {
+        accountKey,
+        ipKey,
+        studentId: student.id,
+        name,
+        phone,
+        ip: clientIp,
+      });
+
+      if (failure.lock) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message: formatRetryAfterMessage(failure.lock.retryAfterSeconds),
+          },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(failure.lock.retryAfterSeconds),
+            },
+          }
+        );
+      }
+
       return NextResponse.json(
-        { ok: false, message: "로그인 정보가 일치하지 않습니다." },
+        {
+          ok: false,
+          remainingAttempts: failure.remainingAttempts,
+          message: buildFailedLoginMessage(failure.remainingAttempts),
+        },
         { status: 401 }
       );
     }
+
+    await clearLoginFailuresOnSuccess(supabase, {
+      accountKey,
+      ipKey,
+    });
 
     const token = createSessionToken({
       id: student.id,
@@ -109,9 +227,10 @@ export async function POST(request: Request) {
     cookieStore.set(SESSION_COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 60 * 60 * 24 * 14,
+      priority: "high",
     });
 
     return NextResponse.json({

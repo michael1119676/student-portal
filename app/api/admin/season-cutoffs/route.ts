@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { rejectIfCrossOrigin } from "@/lib/security";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -82,6 +83,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const originError = rejectIfCrossOrigin(request);
+  if (originError) return originError;
+
   const user = await requireAdmin();
   if (!user) {
     return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
