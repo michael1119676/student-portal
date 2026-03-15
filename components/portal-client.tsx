@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   BookOpen,
+  Gift,
   GraduationCap,
   Instagram,
   MessageCircleMore,
@@ -2127,6 +2128,33 @@ export default function PortalClient({
                           ? "관리자 로그인 상태로 학생 화면과 동일하게 확인할 수 있습니다."
                           : "C 시즌 / N 시즌 / M 시즌 중 원하는 시즌을 눌러 성적 화면으로 이동할 수 있습니다."}
                       </p>
+                    </div>
+
+                    <div className="mx-auto w-full max-w-5xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.location.href = "/shop";
+                        }}
+                        className="group w-full text-left"
+                      >
+                        <Card className="rounded-[2rem] border border-amber-200/25 bg-amber-400/10 text-white transition duration-300 group-hover:-translate-y-0.5 group-hover:border-amber-200/40 group-hover:bg-amber-400/15">
+                          <CardHeader className="space-y-3">
+                            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-amber-200/35 bg-amber-400/20 px-3 py-1 text-xs text-amber-100">
+                              <Gift className="h-3.5 w-3.5" />
+                              Treasure Shop
+                            </div>
+                            <CardTitle className="flex items-center justify-between text-2xl">
+                              상점 입장하기
+                              <ArrowRight className="h-5 w-5 text-white/50 transition-transform duration-200 group-hover:translate-x-1" />
+                            </CardTitle>
+                            <CardDescription className="text-base text-white/65">
+                              코인으로 브론즈/실버/골드/다이아 상자를 열고 당첨 기록을
+                              확인할 수 있습니다.
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      </button>
                     </div>
 
                     <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">

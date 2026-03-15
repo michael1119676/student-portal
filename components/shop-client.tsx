@@ -1,0 +1,1162 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Gift, RefreshCw, Shield, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SessionUser } from "@/lib/session";
+
+type ShopBox = {
+  code: string;
+  name: string;
+  coinCost: number;
+  remainingCount: number;
+  productCount: number;
+};
+
+type FeedItem = {
+  id: number;
+  maskedName: string;
+  boxCode: string;
+  productName: string;
+  isRare: boolean;
+  createdAt: string;
+};
+
+type MyLog = {
+  id: number;
+  createdAt: string;
+  reason: string;
+  delta: number;
+  coinBefore: number;
+  coinAfter: number;
+  productName: string;
+  boxCode: string | null;
+};
+
+type AdminStudent = {
+  id: string;
+  name: string;
+  phone: string;
+  className: string | null;
+  coinBalance: number;
+};
+
+type AdminInventoryProduct = {
+  id: string;
+  name: string;
+  baseProbabilityPercent: number | null;
+  isRare: boolean;
+  rewardCoinDelta: number;
+  rewardCoinMultiplier: number;
+  isActive: boolean;
+  initialQuantity: number;
+  remainingQuantity: number;
+  updatedAt: string | null;
+};
+
+type AdminInventoryBox = {
+  code: string;
+  name: string;
+  coinCost: number;
+  products: AdminInventoryProduct[];
+};
+
+type StudentLogResponse = {
+  student: {
+    id: string;
+    name: string;
+    phone: string;
+    className: string | null;
+    coinBalance: number;
+  };
+  ledgerLogs: Array<{
+    id: number;
+    createdAt: string;
+    eventType: string;
+    reason: string;
+    delta: number;
+    coinBefore: number;
+    coinAfter: number;
+    relatedBoxCode: string | null;
+    relatedProductName: string | null;
+    actorRole: string;
+    actorId: string | null;
+  }>;
+};
+
+type WeeklyWinner = {
+  id: number;
+  createdAt: string;
+  boxCode: string;
+  productName: string;
+  studentId: string;
+  studentName: string;
+  studentPhone: string;
+};
+
+type AdminPanelTab = "inventory" | "studentLogs" | "weeklyLogs" | "coinAdjust";
+
+function formatKst(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function boxBadgeClass(code: string) {
+  if (code === "bronze") return "from-amber-700/60 to-amber-500/20";
+  if (code === "silver") return "from-slate-400/60 to-slate-100/20";
+  if (code === "gold") return "from-yellow-500/70 to-yellow-200/20";
+  return "from-cyan-400/70 to-blue-200/15";
+}
+
+function usePirateLikeBgm(enabled: boolean) {
+  const contextRef = useRef<AudioContext | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const startedRef = useRef(false);
+  const loopDurationSec = 6.2;
+
+  const stop = () => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (contextRef.current) {
+      void contextRef.current.close();
+      contextRef.current = null;
+    }
+    startedRef.current = false;
+  };
+
+  const scheduleLoop = (ctx: AudioContext) => {
+    const notes = [
+      { semitone: 0, dur: 0.28 },
+      { semitone: 3, dur: 0.28 },
+      { semitone: 5, dur: 0.34 },
+      { semitone: 7, dur: 0.42 },
+      { semitone: 5, dur: 0.28 },
+      { semitone: 3, dur: 0.28 },
+      { semitone: 0, dur: 0.4 },
+      { semitone: -2, dur: 0.4 },
+      { semitone: 0, dur: 0.4 },
+    ];
+    const baseHz = 196;
+    let t = ctx.currentTime + 0.04;
+    for (const note of notes) {
+      const freq = baseHz * Math.pow(2, note.semitone / 12);
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.06, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + note.dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + note.dur + 0.03);
+      t += note.dur + 0.02;
+    }
+  };
+
+  useEffect(() => {
+    if (!enabled) {
+      stop();
+      return;
+    }
+
+    const start = async () => {
+      if (startedRef.current) return;
+      const ctx = new window.AudioContext();
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+      contextRef.current = ctx;
+      scheduleLoop(ctx);
+      timerRef.current = window.setInterval(() => scheduleLoop(ctx), loopDurationSec * 1000);
+      startedRef.current = true;
+    };
+
+    const onFirstInteraction = () => {
+      void start();
+      window.removeEventListener("pointerdown", onFirstInteraction);
+      window.removeEventListener("keydown", onFirstInteraction);
+    };
+
+    window.addEventListener("pointerdown", onFirstInteraction);
+    window.addEventListener("keydown", onFirstInteraction);
+    return () => {
+      window.removeEventListener("pointerdown", onFirstInteraction);
+      window.removeEventListener("keydown", onFirstInteraction);
+      stop();
+    };
+  }, [enabled]);
+}
+
+export default function ShopClient({ initialUser }: { initialUser: SessionUser }) {
+  const [coinBalance, setCoinBalance] = useState(0);
+  const [boxes, setBoxes] = useState<ShopBox[]>([]);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [myLogs, setMyLogs] = useState<MyLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+  const [openingBox, setOpeningBox] = useState<string | null>(null);
+  const [rareToast, setRareToast] = useState<string>("");
+  const [rareToastVisible, setRareToastVisible] = useState(false);
+  const lastFeedIdRef = useRef(0);
+  const [adminTab, setAdminTab] = useState<AdminPanelTab>("inventory");
+  const [students, setStudents] = useState<AdminStudent[]>([]);
+  const [studentQuery, setStudentQuery] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
+  const [studentLogData, setStudentLogData] = useState<StudentLogResponse | null>(null);
+  const [week, setWeek] = useState(1);
+  const [weeklyWinners, setWeeklyWinners] = useState<WeeklyWinner[]>([]);
+  const [inventoryBoxes, setInventoryBoxes] = useState<AdminInventoryBox[]>([]);
+  const [inventoryBoxCode, setInventoryBoxCode] = useState("bronze");
+  const [inventoryReason, setInventoryReason] = useState("");
+  const [inventoryDraft, setInventoryDraft] = useState<Record<string, string>>({});
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductQty, setNewProductQty] = useState("");
+  const [newProductProb, setNewProductProb] = useState("");
+  const [newProductReason, setNewProductReason] = useState("");
+  const [newProductRare, setNewProductRare] = useState(false);
+  const [coinAdjustStudentId, setCoinAdjustStudentId] = useState("");
+  const [coinAdjustDelta, setCoinAdjustDelta] = useState("");
+  const [coinAdjustReason, setCoinAdjustReason] = useState("");
+  const isAdmin = initialUser.role === "admin";
+
+  usePirateLikeBgm(true);
+
+  const filteredStudents = useMemo(() => {
+    const keyword = studentQuery.trim().toLowerCase();
+    if (!keyword) return students;
+    return students.filter((student) =>
+      `${student.name} ${student.phone}`.toLowerCase().includes(keyword)
+    );
+  }, [studentQuery, students]);
+
+  const selectedInventoryBox = useMemo(
+    () => inventoryBoxes.find((box) => box.code === inventoryBoxCode) ?? null,
+    [inventoryBoxes, inventoryBoxCode]
+  );
+
+  const tickerText = useMemo(() => {
+    if (feed.length === 0) return "아직 당첨 기록이 없습니다.";
+    return feed
+      .map((item) => `${item.maskedName} 학생 ${item.boxCode.toUpperCase()} 상자 ${item.productName} 당첨`)
+      .join("   ✦   ");
+  }, [feed]);
+
+  const fetchOverview = async () => {
+    const res = await fetch("/api/shop/overview", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "상점 정보를 불러오지 못했습니다.");
+    }
+    setCoinBalance(Number(data.coinBalance ?? 0));
+    setBoxes((data.boxes ?? []) as ShopBox[]);
+    setFeed((data.recentFeed ?? []) as FeedItem[]);
+    const latestId = Math.max(0, ...(data.recentFeed ?? []).map((item: FeedItem) => item.id));
+    lastFeedIdRef.current = Math.max(lastFeedIdRef.current, latestId);
+    if (data.rareTop?.id && data.rareTop.id > lastFeedIdRef.current) {
+      setRareToast(
+        `${data.rareTop.maskedName} 학생 ${String(data.rareTop.boxCode).toUpperCase()} 상자에서 [${data.rareTop.productName}] 당첨!`
+      );
+      setRareToastVisible(true);
+    }
+  };
+
+  const fetchMyLogs = async () => {
+    const res = await fetch("/api/shop/my-logs", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "내역을 불러오지 못했습니다.");
+    }
+    setMyLogs((data.logs ?? []) as MyLog[]);
+  };
+
+  const fetchAdminStudents = useCallback(async () => {
+    if (!isAdmin) return;
+    const res = await fetch("/api/admin/shop/students", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "학생 목록을 불러오지 못했습니다.");
+    }
+    setStudents((data.students ?? []) as AdminStudent[]);
+  }, [isAdmin]);
+
+  const fetchInventory = useCallback(
+    async (boxCode = inventoryBoxCode) => {
+      if (!isAdmin) return;
+      const res = await fetch(`/api/admin/shop/inventory?boxCode=${encodeURIComponent(boxCode)}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "재고를 불러오지 못했습니다.");
+      }
+      const nextBoxes = (data.boxes ?? []) as AdminInventoryBox[];
+      setInventoryBoxes(nextBoxes);
+      setInventoryDraft(
+        nextBoxes.reduce<Record<string, string>>((acc, box) => {
+          for (const product of box.products) {
+            acc[product.id] = String(product.remainingQuantity);
+          }
+          return acc;
+        }, {})
+      );
+    },
+    [isAdmin, inventoryBoxCode]
+  );
+
+  const fetchStudentLogs = async (studentId: string) => {
+    if (!isAdmin || !studentId) return;
+    const res = await fetch(
+      `/api/admin/shop/student-logs?studentId=${encodeURIComponent(studentId)}`,
+      { cache: "no-store" }
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "학생 로그를 불러오지 못했습니다.");
+    }
+    setStudentLogData(data as StudentLogResponse);
+  };
+
+  const fetchWeeklyWinners = useCallback(
+    async (targetWeek: number) => {
+      if (!isAdmin) return;
+      const res = await fetch(`/api/admin/shop/weekly-winners?week=${targetWeek}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "전체 로그를 불러오지 못했습니다.");
+      }
+      setWeeklyWinners((data.winners ?? []) as WeeklyWinner[]);
+    },
+    [isAdmin]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      setLoading(true);
+      setMessage("");
+      try {
+        await fetchOverview();
+        await fetchMyLogs();
+        if (isAdmin) {
+          await fetchAdminStudents();
+          await fetchInventory("bronze");
+          await fetchWeeklyWinners(1);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setMessage(error instanceof Error ? error.message : "상점 로딩에 실패했습니다.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, fetchAdminStudents, fetchInventory, fetchWeeklyWinners]);
+
+  useEffect(() => {
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/shop/feed?limit=25&afterId=${lastFeedIdRef.current}`, {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) return;
+        const items = (data.items ?? []) as FeedItem[];
+        if (items.length === 0) return;
+
+        const maxId = Math.max(...items.map((item) => item.id));
+        lastFeedIdRef.current = Math.max(lastFeedIdRef.current, maxId);
+        setFeed((prev) => {
+          const merged = [...items, ...prev];
+          const uniqueById = new Map<number, FeedItem>();
+          for (const row of merged) {
+            uniqueById.set(row.id, row);
+          }
+          return [...uniqueById.values()]
+            .sort((a, b) => b.id - a.id)
+            .slice(0, 25);
+        });
+
+        const rare = items.find((item) => item.isRare);
+        if (rare) {
+          setRareToast(
+            `${rare.maskedName} 학생 ${rare.boxCode.toUpperCase()} 상자에서 [${rare.productName}] 당첨!`
+          );
+          setRareToastVisible(true);
+        }
+      } catch {
+        //
+      }
+    }, 5000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!rareToastVisible) return;
+    const t = window.setTimeout(() => setRareToastVisible(false), 6000);
+    return () => window.clearTimeout(t);
+  }, [rareToastVisible]);
+
+  const handleDraw = async (boxCode: string) => {
+    setMessage("");
+    setOpeningBox(boxCode);
+
+    try {
+      const res = await fetch("/api/shop/draw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ boxCode }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setMessage(data.message || "상자 열기에 실패했습니다.");
+        return;
+      }
+
+      const result = data.result;
+      setMessage(
+        `${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨! (코인 ${result.coinBefore} → ${result.coinAfter})`
+      );
+      if (result.isRare) {
+        setRareToast(
+          `${initialUser.name[0] || "익"}XX 학생 ${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨!`
+        );
+        setRareToastVisible(true);
+      }
+      await fetchOverview();
+      await fetchMyLogs();
+      if (isAdmin) {
+        await fetchInventory(inventoryBoxCode);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "상자 열기에 실패했습니다.");
+    } finally {
+      window.setTimeout(() => setOpeningBox(null), 600);
+    }
+  };
+
+  const handleSyncFromExcel = async (resetRemaining: boolean) => {
+    try {
+      setMessage("");
+      const res = await fetch("/api/admin/shop/sync-from-excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resetRemaining }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setMessage(data.message || "엑셀 동기화에 실패했습니다.");
+        return;
+      }
+      setMessage(data.message || "엑셀 동기화를 완료했습니다.");
+      await fetchOverview();
+      await fetchInventory(inventoryBoxCode);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "엑셀 동기화에 실패했습니다.");
+    }
+  };
+
+  const handleInventorySave = async (productId: string) => {
+    const nextQuantity = Number(inventoryDraft[productId] ?? "");
+    if (!Number.isFinite(nextQuantity)) {
+      setMessage("수량은 숫자로 입력해 주세요.");
+      return;
+    }
+    if (!inventoryReason.trim()) {
+      setMessage("재고 수정 사유를 입력해 주세요.");
+      return;
+    }
+
+    const res = await fetch("/api/admin/shop/inventory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productId,
+        remainingQuantity: Math.max(0, Math.round(nextQuantity)),
+        reason: inventoryReason.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setMessage(data.message || "재고 수정에 실패했습니다.");
+      return;
+    }
+
+    setMessage(data.message || "재고 수정 완료");
+    await fetchOverview();
+    await fetchInventory(inventoryBoxCode);
+  };
+
+  const handleAddProduct = async () => {
+    const quantity = Number(newProductQty);
+    const probability = newProductProb.trim() ? Number(newProductProb) : null;
+    if (!newProductName.trim() || !Number.isFinite(quantity)) {
+      setMessage("신규 상품명과 수량을 입력해 주세요.");
+      return;
+    }
+    if (!newProductReason.trim()) {
+      setMessage("신규 상품 추가 사유를 입력해 주세요.");
+      return;
+    }
+
+    const res = await fetch("/api/admin/shop/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        boxCode: inventoryBoxCode,
+        name: newProductName.trim(),
+        quantity: Math.max(0, Math.round(quantity)),
+        baseProbabilityPercent: probability,
+        isRare: newProductRare,
+        reason: newProductReason.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setMessage(data.message || "상품 추가에 실패했습니다.");
+      return;
+    }
+
+    setMessage(data.message || "상품 추가 완료");
+    setNewProductName("");
+    setNewProductQty("");
+    setNewProductProb("");
+    setNewProductReason("");
+    setNewProductRare(false);
+    await fetchOverview();
+    await fetchInventory(inventoryBoxCode);
+  };
+
+  const handleCoinAdjust = async () => {
+    if (!coinAdjustStudentId) {
+      setMessage("코인 조정 대상을 선택해 주세요.");
+      return;
+    }
+    const delta = Number(coinAdjustDelta);
+    if (!Number.isFinite(delta) || Math.round(delta) === 0) {
+      setMessage("증감 수량을 정확히 입력해 주세요.");
+      return;
+    }
+    if (!coinAdjustReason.trim()) {
+      setMessage("사유를 입력해 주세요.");
+      return;
+    }
+
+    const res = await fetch("/api/admin/shop/coin-adjust", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        studentId: coinAdjustStudentId,
+        delta: Math.round(delta),
+        reason: coinAdjustReason.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setMessage(data.message || "코인 조정에 실패했습니다.");
+      return;
+    }
+    setMessage(data.message || "코인 조정 완료");
+    setCoinAdjustDelta("");
+    setCoinAdjustReason("");
+    await fetchAdminStudents();
+    await fetchOverview();
+    if (selectedStudentId) {
+      await fetchStudentLogs(selectedStudentId);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-[#04070d] px-4 py-8 text-white sm:px-8">
+      <div
+        className="pointer-events-none fixed inset-0 opacity-70"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 20% 20%, rgba(250,204,21,0.18), transparent 35%), radial-gradient(circle at 80% 10%, rgba(14,165,233,0.18), transparent 32%), radial-gradient(circle at 50% 100%, rgba(248,113,113,0.08), transparent 32%)",
+        }}
+      />
+
+      {rareToastVisible && (
+        <div className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+          <div className="rounded-2xl border border-rose-300/40 bg-rose-500/20 px-5 py-3 text-sm font-medium text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.25)]">
+            {rareToast}
+          </div>
+        </div>
+      )}
+
+      <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-amber-200/70">Treasure Shop</p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">보물상자 상점</h1>
+            <p className="mt-1 text-sm text-white/60">
+              상자 오픈, 코인 사용 내역, 당첨 기록이 모두 저장됩니다.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href={isAdmin ? "/admin" : "/"}>
+              <Button
+                variant="secondary"
+                className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+              >
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                포털로 돌아가기
+              </Button>
+            </Link>
+            <Button
+              variant="secondary"
+              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+              onClick={() => {
+                void fetchOverview();
+                void fetchMyLogs();
+              }}
+            >
+              <RefreshCw className="mr-1 h-4 w-4" />
+              새로고침
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-amber-200/20 bg-amber-400/10 px-4 py-3">
+          <p className="text-sm text-amber-100">
+            현재 보유 코인: <span className="font-semibold">{coinBalance}</span>
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+          <p className="mb-2 text-xs text-white/60">최근 당첨 내역</p>
+          <div className="overflow-hidden whitespace-nowrap rounded-xl border border-white/10 bg-black/30 py-2">
+            <div className="marquee-track px-4 text-sm text-white/80">{`${tickerText}   ✦   ${tickerText}`}</div>
+          </div>
+        </div>
+
+        {loading ? (
+          <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white">
+            <CardContent className="py-8 text-center text-white/70">상점 정보를 불러오는 중...</CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {boxes.map((box) => {
+              const isOpening = openingBox === box.code;
+              const canOpen = coinBalance >= box.coinCost && box.remainingCount > 0 && !isOpening;
+              return (
+                <Card
+                  key={box.code}
+                  className={`rounded-[2rem] border border-white/10 bg-black/35 text-white shadow-xl transition ${
+                    isOpening ? "scale-[1.01] ring-2 ring-amber-300/50" : ""
+                  }`}
+                >
+                  <CardHeader>
+                    <div
+                      className={`mb-2 inline-flex w-fit rounded-full bg-gradient-to-r px-3 py-1 text-xs text-white/85 ${boxBadgeClass(box.code)}`}
+                    >
+                      {box.name}
+                    </div>
+                    <CardTitle className="text-2xl">{box.coinCost} 코인</CardTitle>
+                    <CardDescription className="text-white/55">
+                      남은 재고 {box.remainingCount}개 · 상품 {box.productCount}종
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex h-24 items-center justify-center rounded-2xl border border-white/10 bg-black/30">
+                      <Gift
+                        className={`h-10 w-10 text-amber-200 transition-all duration-500 ${
+                          isOpening ? "animate-pulse scale-110" : ""
+                        }`}
+                      />
+                    </div>
+                    <Button
+                      onClick={() => void handleDraw(box.code)}
+                      disabled={!canOpen}
+                      className="w-full rounded-2xl bg-amber-300 text-black hover:bg-amber-200 disabled:bg-white/20 disabled:text-white/50"
+                    >
+                      {box.remainingCount <= 0
+                        ? "재고 소진"
+                        : coinBalance < box.coinCost
+                          ? "코인 부족"
+                          : isOpening
+                            ? "오픈 중..."
+                            : "상자 열기"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {message && (
+          <div className="rounded-2xl border border-cyan-200/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
+            {message}
+          </div>
+        )}
+
+        <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white">
+          <CardHeader>
+            <CardTitle className="text-xl">내 코인/뽑기 기록</CardTitle>
+            <CardDescription className="text-white/55">
+              날짜&시각(KST), 사유, 변동 전/후 코인, 획득 상품
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="text-white/60">
+                <tr>
+                  <th className="px-3 py-2 text-left">날짜&시각</th>
+                  <th className="px-3 py-2 text-left">사유</th>
+                  <th className="px-3 py-2 text-left">변동량</th>
+                  <th className="px-3 py-2 text-left">변동 전 코인</th>
+                  <th className="px-3 py-2 text-left">변동 후 코인</th>
+                  <th className="px-3 py-2 text-left">획득 상품</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myLogs.map((row) => (
+                  <tr key={row.id} className="border-t border-white/10">
+                    <td className="px-3 py-2">{formatKst(row.createdAt)}</td>
+                    <td className="px-3 py-2">{row.reason}</td>
+                    <td className="px-3 py-2">{row.delta > 0 ? `+${row.delta}` : row.delta}</td>
+                    <td className="px-3 py-2">{row.coinBefore}</td>
+                    <td className="px-3 py-2">{row.coinAfter}</td>
+                    <td className="px-3 py-2">{row.productName || "-"}</td>
+                  </tr>
+                ))}
+                {!myLogs.length && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-4 text-center text-white/55">
+                      아직 기록이 없습니다.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+
+        {isAdmin && (
+          <Card className="rounded-[2rem] border border-cyan-300/25 bg-cyan-500/10 text-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Shield className="h-5 w-5 text-cyan-100" />
+                관리자 전용 기능
+              </CardTitle>
+              <CardDescription className="text-cyan-50/75">
+                재고/학생별 로그/전체 로그/코인 조정을 관리할 수 있습니다.
+              </CardDescription>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  variant={adminTab === "inventory" ? "default" : "secondary"}
+                  className={
+                    adminTab === "inventory"
+                      ? "rounded-2xl bg-white text-black hover:bg-white/90"
+                      : "rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                  }
+                  onClick={() => setAdminTab("inventory")}
+                >
+                  각 상자별 남은 상품 확인
+                </Button>
+                <Button
+                  variant={adminTab === "studentLogs" ? "default" : "secondary"}
+                  className={
+                    adminTab === "studentLogs"
+                      ? "rounded-2xl bg-white text-black hover:bg-white/90"
+                      : "rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                  }
+                  onClick={() => setAdminTab("studentLogs")}
+                >
+                  학생별 로그 보기
+                </Button>
+                <Button
+                  variant={adminTab === "weeklyLogs" ? "default" : "secondary"}
+                  className={
+                    adminTab === "weeklyLogs"
+                      ? "rounded-2xl bg-white text-black hover:bg-white/90"
+                      : "rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                  }
+                  onClick={() => setAdminTab("weeklyLogs")}
+                >
+                  전체 로그 보기
+                </Button>
+                <Button
+                  variant={adminTab === "coinAdjust" ? "default" : "secondary"}
+                  className={
+                    adminTab === "coinAdjust"
+                      ? "rounded-2xl bg-white text-black hover:bg-white/90"
+                      : "rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                  }
+                  onClick={() => setAdminTab("coinAdjust")}
+                >
+                  학생 코인 추가/소멸
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-5">
+              {adminTab === "inventory" && (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-white/80">상자 선택</Label>
+                      <select
+                        value={inventoryBoxCode}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setInventoryBoxCode(value);
+                          void fetchInventory(value);
+                        }}
+                        className="h-11 rounded-xl border border-white/15 bg-black/30 px-3 text-white"
+                      >
+                        <option value="bronze">브론즈</option>
+                        <option value="silver">실버</option>
+                        <option value="gold">골드</option>
+                        <option value="diamond">다이아</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-white/80">재고 수정 사유 (필수)</Label>
+                      <Input
+                        value={inventoryReason}
+                        onChange={(e) => setInventoryReason(e.target.value)}
+                        className="h-11 min-w-64 rounded-xl border-white/15 bg-black/30 text-white"
+                        placeholder="예: 이벤트 지급분 반영"
+                      />
+                    </div>
+                    <Button
+                      variant="secondary"
+                      className="rounded-xl bg-white/10 text-white hover:bg-white/20"
+                      onClick={() => void handleSyncFromExcel(false)}
+                    >
+                      엑셀 기준 동기화
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="rounded-xl bg-white/10 text-white hover:bg-white/20"
+                      onClick={() => void handleSyncFromExcel(true)}
+                    >
+                      엑셀 기준 재고 리셋
+                    </Button>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-2xl border border-white/10">
+                    <table className="w-full min-w-[920px] text-sm">
+                      <thead className="bg-black/40 text-white/65">
+                        <tr>
+                          <th className="px-3 py-2 text-left">상품명</th>
+                          <th className="px-3 py-2 text-left">초기 수량</th>
+                          <th className="px-3 py-2 text-left">남은 수량</th>
+                          <th className="px-3 py-2 text-left">기준 확률(%)</th>
+                          <th className="px-3 py-2 text-left">희귀</th>
+                          <th className="px-3 py-2 text-left">수정</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedInventoryBox?.products ?? []).map((product) => (
+                          <tr key={product.id} className="border-t border-white/10">
+                            <td className="px-3 py-2">{product.name}</td>
+                            <td className="px-3 py-2">{product.initialQuantity}</td>
+                            <td className="px-3 py-2">
+                              <Input
+                                value={inventoryDraft[product.id] ?? String(product.remainingQuantity)}
+                                onChange={(e) =>
+                                  setInventoryDraft((prev) => ({
+                                    ...prev,
+                                    [product.id]: e.target.value.replace(/[^\d-]/g, ""),
+                                  }))
+                                }
+                                className="h-9 w-24 rounded-lg border-white/15 bg-black/30 text-white"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              {product.baseProbabilityPercent === null
+                                ? "-"
+                                : product.baseProbabilityPercent.toFixed(4)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {product.isRare ? (
+                                <span className="rounded-full border border-rose-300/35 bg-rose-500/20 px-2 py-0.5 text-xs text-rose-100">
+                                  희귀
+                                </span>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Button
+                                variant="secondary"
+                                className="rounded-lg bg-white/10 text-white hover:bg-white/20"
+                                onClick={() => void handleInventorySave(product.id)}
+                              >
+                                즉시 반영
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                        {!selectedInventoryBox?.products.length && (
+                          <tr>
+                            <td colSpan={6} className="px-3 py-4 text-center text-white/55">
+                              표시할 상품이 없습니다.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                    <p className="mb-3 text-sm text-white/75">신규 상품 추가</p>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                      <Input
+                        value={newProductName}
+                        onChange={(e) => setNewProductName(e.target.value)}
+                        placeholder="상품명"
+                        className="h-11 rounded-xl border-white/15 bg-black/30 text-white"
+                      />
+                      <Input
+                        value={newProductQty}
+                        onChange={(e) => setNewProductQty(e.target.value.replace(/[^\d]/g, ""))}
+                        placeholder="수량"
+                        className="h-11 rounded-xl border-white/15 bg-black/30 text-white"
+                      />
+                      <Input
+                        value={newProductProb}
+                        onChange={(e) => setNewProductProb(e.target.value.replace(/[^\d.]/g, ""))}
+                        placeholder="기준 확률(선택)"
+                        className="h-11 rounded-xl border-white/15 bg-black/30 text-white"
+                      />
+                      <Input
+                        value={newProductReason}
+                        onChange={(e) => setNewProductReason(e.target.value)}
+                        placeholder="추가 사유(필수)"
+                        className="h-11 rounded-xl border-white/15 bg-black/30 text-white"
+                      />
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 text-sm text-white/80">
+                          <input
+                            type="checkbox"
+                            checked={newProductRare}
+                            onChange={(e) => setNewProductRare(e.target.checked)}
+                          />
+                          희귀 상품
+                        </label>
+                        <Button
+                          className="ml-auto rounded-xl bg-white text-black hover:bg-white/90"
+                          onClick={() => void handleAddProduct()}
+                        >
+                          상품 추가
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {adminTab === "studentLogs" && (
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <Input
+                      value={studentQuery}
+                      onChange={(e) => setStudentQuery(e.target.value)}
+                      placeholder="학생 이름/전화번호 검색"
+                      className="h-11 rounded-xl border-white/15 bg-black/30 text-white"
+                    />
+                    <select
+                      value={selectedStudentId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setSelectedStudentId(id);
+                        if (id) void fetchStudentLogs(id);
+                      }}
+                      className="h-11 rounded-xl border border-white/15 bg-black/30 px-3 text-white"
+                    >
+                      <option value="">학생 선택</option>
+                      {filteredStudents.map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {student.name} / {student.phone}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {studentLogData ? (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80">
+                        {studentLogData.student.name} / {studentLogData.student.phone} / 현재 코인{" "}
+                        {studentLogData.student.coinBalance}
+                      </div>
+                      <div className="overflow-x-auto rounded-2xl border border-white/10">
+                        <table className="w-full min-w-[960px] text-sm">
+                          <thead className="bg-black/40 text-white/65">
+                            <tr>
+                              <th className="px-3 py-2 text-left">날짜&시각</th>
+                              <th className="px-3 py-2 text-left">이벤트</th>
+                              <th className="px-3 py-2 text-left">사유</th>
+                              <th className="px-3 py-2 text-left">변동량</th>
+                              <th className="px-3 py-2 text-left">전 코인</th>
+                              <th className="px-3 py-2 text-left">후 코인</th>
+                              <th className="px-3 py-2 text-left">상자</th>
+                              <th className="px-3 py-2 text-left">상품</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {studentLogData.ledgerLogs.map((log) => (
+                              <tr key={log.id} className="border-t border-white/10">
+                                <td className="px-3 py-2">{formatKst(log.createdAt)}</td>
+                                <td className="px-3 py-2">{log.eventType}</td>
+                                <td className="px-3 py-2">{log.reason}</td>
+                                <td className="px-3 py-2">
+                                  {log.delta > 0 ? `+${log.delta}` : log.delta}
+                                </td>
+                                <td className="px-3 py-2">{log.coinBefore}</td>
+                                <td className="px-3 py-2">{log.coinAfter}</td>
+                                <td className="px-3 py-2">{log.relatedBoxCode || "-"}</td>
+                                <td className="px-3 py-2">{log.relatedProductName || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-white/55">학생을 선택하면 로그가 표시됩니다.</p>
+                  )}
+                </div>
+              )}
+
+              {adminTab === "weeklyLogs" && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Label className="text-white/80">N 시즌 주차 선택</Label>
+                    <select
+                      value={week}
+                      onChange={(e) => {
+                        const nextWeek = Number(e.target.value);
+                        setWeek(nextWeek);
+                        void fetchWeeklyWinners(nextWeek);
+                      }}
+                      className="h-11 rounded-xl border border-white/15 bg-black/30 px-3 text-white"
+                    >
+                      {Array.from({ length: 12 }, (_, idx) => idx + 1).map((w) => (
+                        <option key={w} value={w}>
+                          {w}주차
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="overflow-x-auto rounded-2xl border border-white/10">
+                    <table className="w-full min-w-[900px] text-sm">
+                      <thead className="bg-black/40 text-white/65">
+                        <tr>
+                          <th className="px-3 py-2 text-left">날짜/시간</th>
+                          <th className="px-3 py-2 text-left">상자 종류</th>
+                          <th className="px-3 py-2 text-left">당첨 상품</th>
+                          <th className="px-3 py-2 text-left">당첨자 이름</th>
+                          <th className="px-3 py-2 text-left">당첨자 전화번호</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {weeklyWinners.map((winner) => (
+                          <tr key={winner.id} className="border-t border-white/10">
+                            <td className="px-3 py-2">{formatKst(winner.createdAt)}</td>
+                            <td className="px-3 py-2">{winner.boxCode.toUpperCase()}</td>
+                            <td className="px-3 py-2">{winner.productName}</td>
+                            <td className="px-3 py-2">{winner.studentName}</td>
+                            <td className="px-3 py-2">{winner.studentPhone}</td>
+                          </tr>
+                        ))}
+                        {!weeklyWinners.length && (
+                          <tr>
+                            <td colSpan={5} className="px-3 py-4 text-center text-white/55">
+                              선택한 주차의 당첨 기록이 없습니다.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {adminTab === "coinAdjust" && (
+                <div className="space-y-4">
+                  <Input
+                    value={studentQuery}
+                    onChange={(e) => setStudentQuery(e.target.value)}
+                    placeholder="학생 이름/전화번호 검색"
+                    className="h-11 rounded-xl border-white/15 bg-black/30 text-white"
+                  />
+                  <select
+                    value={coinAdjustStudentId}
+                    onChange={(e) => setCoinAdjustStudentId(e.target.value)}
+                    className="h-11 rounded-xl border border-white/15 bg-black/30 px-3 text-white"
+                  >
+                    <option value="">학생 선택</option>
+                    {filteredStudents.map((student) => (
+                      <option key={student.id} value={student.id}>
+                        {student.name} / {student.phone} / 현재 {student.coinBalance}코인
+                      </option>
+                    ))}
+                  </select>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Input
+                      value={coinAdjustDelta}
+                      onChange={(e) => setCoinAdjustDelta(e.target.value.replace(/[^\d+-]/g, ""))}
+                      placeholder="+3 또는 -2"
+                      className="h-11 rounded-xl border-white/15 bg-black/30 text-white"
+                    />
+                    <Input
+                      value={coinAdjustReason}
+                      onChange={(e) => setCoinAdjustReason(e.target.value)}
+                      placeholder="조정 사유 (필수)"
+                      className="h-11 rounded-xl border-white/15 bg-black/30 text-white"
+                    />
+                  </div>
+                  <Button
+                    className="rounded-xl bg-white text-black hover:bg-white/90"
+                    onClick={() => void handleCoinAdjust()}
+                  >
+                    코인 즉시 반영
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/45">
+          <p className="flex items-center gap-1">
+            <Sparkles className="h-3.5 w-3.5" />
+            상점 로그 시각은 KST(Asia/Seoul) 기준으로 표시됩니다.
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+}
