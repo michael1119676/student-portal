@@ -146,8 +146,8 @@ type AdminStatsResponse = {
 
 const seasons = [
   { id: "C", title: "Season C", subtitle: "시즌 C 성적 확인" },
-  { id: "M", title: "Season M", subtitle: "시즌 M 성적 확인" },
   { id: "N", title: "Season N", subtitle: "시즌 N 성적 확인" },
+  { id: "M", title: "Season M", subtitle: "시즌 M 성적 확인" },
 ];
 
 const universityProfiles = {
@@ -1607,6 +1607,15 @@ export default function PortalClient({
                 ) : (
                   selectedSeason === "C" ? (
                     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+                      <div className="self-start">
+                        <Button
+                          variant="secondary"
+                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          onClick={() => setSelectedSeason(null)}
+                        >
+                          시즌 선택으로 돌아가기
+                        </Button>
+                      </div>
                       <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                         <CardHeader>
                           <CardTitle className="text-3xl">Season C (1~10회)</CardTitle>
@@ -1651,38 +1660,23 @@ export default function PortalClient({
                                       className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
-                                      <defs>
-                                        <linearGradient id="myScoreLine" x1="0%" y1="0%" x2="100%" y2="0%">
-                                          <stop offset="0%" stopColor="#fda4af" />
-                                          <stop offset="45%" stopColor="#fb7185" />
-                                          <stop offset="100%" stopColor="#ef4444" />
-                                        </linearGradient>
-                                        <filter id="myScoreGlow" x="-50%" y="-50%" width="200%" height="200%">
-                                          <feGaussianBlur stdDeviation="0.8" result="blur" />
-                                          <feMerge>
-                                            <feMergeNode in="blur" />
-                                            <feMergeNode in="SourceGraphic" />
-                                          </feMerge>
-                                        </filter>
-                                      </defs>
                                       <polyline
                                         points={linePoints}
                                         fill="none"
-                                        stroke="url(#myScoreLine)"
-                                        strokeWidth="2.4"
+                                        stroke="#ef4444"
+                                        strokeWidth="2"
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
-                                        filter="url(#myScoreGlow)"
                                       />
                                       {myPlotPoints.map((point, index) => (
                                         <circle
                                           key={`my-point-${index}`}
                                           cx={point.x}
                                           cy={point.y}
-                                          r="1.7"
+                                          r="1.5"
                                           fill="#ef4444"
-                                          stroke="#fee2e2"
-                                          strokeWidth="0.8"
+                                          stroke="#ffffff"
+                                          strokeWidth="0.6"
                                         />
                                       ))}
                                     </svg>
@@ -1715,14 +1709,23 @@ export default function PortalClient({
 
                                   <div className="absolute left-12 right-6 bottom-4 grid grid-cols-10 gap-2">
                                     {seasonCData.rounds.map((round) => (
-                                      <div key={`label-${round.round}`} className="text-center">
+                                      <button
+                                        key={`label-${round.round}`}
+                                        type="button"
+                                        onClick={() => setSelectedRound(round.round)}
+                                        className={`rounded-md py-1 text-center transition ${
+                                          selectedRound === round.round
+                                            ? "bg-white/10"
+                                            : "hover:bg-white/5"
+                                        }`}
+                                      >
                                         <p className="text-sm font-medium text-white/90">
                                           {round.round}회
                                         </p>
                                         <p className="text-[11px] text-white/45">
                                           평균 {round.averageScore}
                                         </p>
-                                      </div>
+                                      </button>
                                     ))}
                                   </div>
                                 </div>
@@ -1921,6 +1924,15 @@ export default function PortalClient({
                     </div>
                   ) : (
                     <div className="mx-auto w-full max-w-3xl">
+                      <div className="mb-3">
+                        <Button
+                          variant="secondary"
+                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          onClick={() => setSelectedSeason(null)}
+                        >
+                          시즌 선택으로 돌아가기
+                        </Button>
+                      </div>
                       <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                         <CardHeader>
                           <CardTitle className="text-3xl">Season {selectedSeason}</CardTitle>
