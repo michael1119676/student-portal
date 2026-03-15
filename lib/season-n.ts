@@ -265,12 +265,13 @@ export function buildSeasonNViewData(
     const scores = rows
       .map((row) => row.score)
       .filter((score): score is number => score !== null);
-    const averageScore =
-      scores.length > 0 ? toOneDecimal(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+    const rawAverageScore =
+      scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    const averageScore = toOneDecimal(rawAverageScore);
 
     const myRow = rows.find((row) => row.studentId === targetStudentId) ?? null;
     const myScore = myRow?.score ?? null;
-    const myStdScore = computeStdScore(myScore, averageScore);
+    const myStdScore = computeStdScore(myScore, rawAverageScore);
     const cutoff = cutoffsByRound[round] ?? { cut1: null, cut2: null, cut3: null };
 
     rounds.push({
