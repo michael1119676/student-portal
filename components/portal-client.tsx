@@ -236,6 +236,27 @@ function getTargetUniversity(value?: string | null) {
   return "seoul";
 }
 
+function buildSmoothPath(points: Array<{ x: number; y: number }>) {
+  if (points.length < 2) return "";
+
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] ?? points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+
+  return d;
+}
+
 export default function PortalClient({
   mode = "student",
   initialSessionUser = null,
@@ -321,6 +342,8 @@ export default function PortalClient({
     () => myPlotPoints.map((point) => `${point.x},${point.y}`).join(" "),
     [myPlotPoints]
   );
+
+  const smoothLinePath = useMemo(() => buildSmoothPath(myPlotPoints), [myPlotPoints]);
 
   function applyProfile(profileData?: StudentProfile | null) {
     setSelectedKorean(profileData?.korean_subject || "언어와 매체");
@@ -1660,23 +1683,50 @@ export default function PortalClient({
                                       className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
-                                      <polyline
-                                        points={linePoints}
-                                        fill="none"
-                                        stroke="#ef4444"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
+                                      <defs>
+                                        <filter id="lineGlow" x="-40%" y="-40%" width="180%" height="180%">
+                                          <feGaussianBlur stdDeviation="1.6" />
+                                        </filter>
+                                      </defs>
+                                      {smoothLinePath && (
+                                        <>
+                                          <path
+                                            d={smoothLinePath}
+                                            fill="none"
+                                            stroke="#ef4444"
+                                            strokeOpacity="0.38"
+                                            strokeWidth="5.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            filter="url(#lineGlow)"
+                                          />
+                                          <path
+                                            d={smoothLinePath}
+                                            fill="none"
+                                            stroke="#f4555a"
+                                            strokeWidth="2.4"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        </>
+                                      )}
                                       {myPlotPoints.map((point, index) => (
                                         <circle
                                           key={`my-point-${index}`}
                                           cx={point.x}
                                           cy={point.y}
-                                          r="1.5"
+                                          r="2.05"
+                                          fill="#ffffff"
+                                          fillOpacity="0.85"
+                                        />
+                                      ))}
+                                      {myPlotPoints.map((point, index) => (
+                                        <circle
+                                          key={`my-point-core-${index}`}
+                                          cx={point.x}
+                                          cy={point.y}
+                                          r="1.3"
                                           fill="#ef4444"
-                                          stroke="#ffffff"
-                                          strokeWidth="0.6"
                                         />
                                       ))}
                                     </svg>
