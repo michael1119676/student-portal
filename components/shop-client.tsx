@@ -810,7 +810,9 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                           <thead className="bg-black/40 text-white/65">
                             <tr>
                               <th className="px-3 py-2 text-left">상품명</th>
-                              <th className="px-3 py-2 text-left">초기 확률(%)</th>
+                              <th className="px-3 py-2 text-left">
+                                {isAdmin ? "초기 확률(%)" : "확률(%)"}
+                              </th>
                               {isAdmin && <th className="px-3 py-2 text-left">실시간 확률(%)</th>}
                             </tr>
                           </thead>
