@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -210,6 +210,13 @@ type AdminStatsResponse = {
   };
 };
 
+type PortalHistoryState = {
+  __portalNav: true;
+  selectedSeason: string | null;
+  adminStep: "home" | "search" | "scores" | "stats";
+  selectedStudentId: string | null;
+};
+
 const seasons = [
   { id: "C", title: "Season C", subtitle: "시즌 C 성적 확인" },
   { id: "N", title: "Season N", subtitle: "시즌 N 성적 확인" },
@@ -378,6 +385,9 @@ export default function PortalClient({
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
   const [adminStatsLoading, setAdminStatsLoading] = useState(false);
   const [adminStatsError, setAdminStatsError] = useState("");
+  const historyReadyRef = useRef(false);
+  const isApplyingPopStateRef = useRef(false);
+  const lastHistoryKeyRef = useRef("");
 
   const isLoggedIn = !!sessionUser;
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
@@ -447,6 +457,88 @@ export default function PortalClient({
     setSelectedScience2(profileData?.science_2 || "화학 I");
     setTargetUniversity(getTargetUniversity(profileData?.target_university));
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const initialState: PortalHistoryState = {
+      __portalNav: true,
+      selectedSeason: null,
+      adminStep: "home",
+      selectedStudentId: null,
+    };
+    const initialKey = JSON.stringify(initialState);
+    lastHistoryKeyRef.current = initialKey;
+    window.history.replaceState(initialState, "", window.location.href);
+    historyReadyRef.current = true;
+
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as PortalHistoryState | null;
+      if (!state || state.__portalNav !== true) return;
+
+      isApplyingPopStateRef.current = true;
+
+      setSelectedSeason(state.selectedSeason ?? null);
+
+      if (isAdminMode) {
+        setAdminStep(state.adminStep ?? "home");
+        if (!state.selectedStudentId) {
+          setSelectedStudent(null);
+        } else {
+          const nextStudent =
+            managedStudents.find((student) => student.id === state.selectedStudentId) ?? null;
+          setSelectedStudent(nextStudent);
+          if (nextStudent) {
+            void fetch(`/api/admin/student?studentId=${encodeURIComponent(nextStudent.id)}`, {
+              cache: "no-store",
+            })
+              .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+              .then(({ ok, data }) => {
+                if (!ok) return;
+                applyProfile(data.profile as StudentProfile | undefined);
+              })
+              .catch(() => {
+                // Ignore popstate profile fetch failures and keep current UI state.
+              });
+          }
+        }
+      }
+
+      lastHistoryKeyRef.current = JSON.stringify(state);
+      // Let React apply state updates first, then allow pushState again.
+      requestAnimationFrame(() => {
+        isApplyingPopStateRef.current = false;
+      });
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [isAdminMode, managedStudents]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!historyReadyRef.current) return;
+
+    const nextState: PortalHistoryState = {
+      __portalNav: true,
+      selectedSeason,
+      adminStep,
+      selectedStudentId: selectedStudent?.id ?? null,
+    };
+    const nextKey = JSON.stringify(nextState);
+
+    if (nextKey === lastHistoryKeyRef.current) return;
+
+    if (isApplyingPopStateRef.current) {
+      lastHistoryKeyRef.current = nextKey;
+      return;
+    }
+
+    window.history.pushState(nextState, "", window.location.href);
+    lastHistoryKeyRef.current = nextKey;
+  }, [selectedSeason, adminStep, selectedStudent?.id]);
 
   useEffect(() => {
     if (isAdminMode) {
