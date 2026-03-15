@@ -63,7 +63,13 @@ export default function AboutPage() {
   }, [selectedPreview]);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.1),transparent_36%),#03050b] px-6 py-10 text-white sm:px-8">
+    <main
+      className="min-h-screen bg-[#05070d] px-6 py-10 text-white sm:px-8"
+      style={{
+        backgroundImage:
+          "radial-gradient(circle at top left, rgba(34,211,238,0.14), transparent 42%), radial-gradient(circle at bottom right, rgba(244,114,182,0.1), transparent 36%)",
+      }}
+    >
       <div className="mx-auto w-full max-w-6xl space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

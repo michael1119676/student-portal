@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: student, error } = await supabase
+    const { data: students, error } = await supabase
       .from("students")
       .select(`
         id,
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
       `)
       .eq("name", name)
       .eq("phone", phone)
-      .maybeSingle();
+      .limit(2);
 
     if (error) {
       console.error("[login] supabase query error:", error.message);
@@ -132,6 +132,16 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    if ((students?.length ?? 0) > 1) {
+      console.warn("[login] duplicate student rows found for same name+phone:", {
+        name,
+        phone,
+        count: students?.length ?? 0,
+      });
+    }
+
+    const student = students?.[0];
 
     if (!student) {
       let failure: Awaited<ReturnType<typeof recordFailedLoginAttempt>>;
@@ -245,11 +255,14 @@ export async function POST(request: Request) {
       console.error("[login] login guard clear failed:", guardError);
     }
 
+    const safeRole = student.role === "admin" ? "admin" : "student";
+    const safePhone = String(student.phone || phone);
+
     const token = createSessionToken({
       id: student.id,
       name: student.name,
-      phone: student.phone,
-      role: student.role,
+      phone: safePhone,
+      role: safeRole,
     });
 
     const cookieStore = await cookies();
@@ -267,8 +280,8 @@ export async function POST(request: Request) {
       user: {
         id: student.id,
         name: student.name,
-        phone: student.phone,
-        role: student.role,
+        phone: safePhone,
+        role: safeRole,
       },
       profile: {
         korean_subject: student.korean_subject,
