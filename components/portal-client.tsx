@@ -2049,38 +2049,28 @@ export default function PortalClient({
                                       className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
-                                      <defs>
-                                        <filter id="cScoreLineGlow" x="-20%" y="-20%" width="140%" height="140%">
-                                          <feDropShadow
-                                            dx="0"
-                                            dy="0.4"
-                                            stdDeviation="0.55"
-                                            floodColor="#e25566"
-                                            floodOpacity="0.16"
-                                          />
-                                        </filter>
-                                      </defs>
                                       {smoothLinePath && (
                                         <path
                                           d={smoothLinePath}
                                           fill="none"
                                           stroke="#e25566"
-                                          strokeWidth="2"
+                                          strokeWidth="1.8"
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
-                                          filter="url(#cScoreLineGlow)"
                                         />
                                       )}
                                       {myPlotPoints.map((point, index) => (
-                                        <circle
-                                          key={`my-point-${index}`}
-                                          cx={point.x}
-                                          cy={point.y}
-                                          fill="#ffffff"
-                                          stroke="#e25566"
-                                          strokeWidth="0.8"
-                                          r="0.7"
-                                        />
+                                        <React.Fragment key={`my-point-${index}`}>
+                                          <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            fill="#e25566"
+                                            stroke="#ff8a95"
+                                            strokeWidth="0.7"
+                                            r="2.9"
+                                          />
+                                          <circle cx={point.x} cy={point.y} fill="#ffffff" r="0.7" />
+                                        </React.Fragment>
                                       ))}
                                     </svg>
                                   )}
@@ -2380,38 +2370,28 @@ export default function PortalClient({
                                       className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
-                                      <defs>
-                                        <filter id="nScoreLineGlow" x="-20%" y="-20%" width="140%" height="140%">
-                                          <feDropShadow
-                                            dx="0"
-                                            dy="0.4"
-                                            stdDeviation="0.55"
-                                            floodColor="#e25566"
-                                            floodOpacity="0.16"
-                                          />
-                                        </filter>
-                                      </defs>
                                       {nSmoothLinePath && (
                                         <path
                                           d={nSmoothLinePath}
                                           fill="none"
                                           stroke="#e25566"
-                                          strokeWidth="2"
+                                          strokeWidth="1.8"
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
-                                          filter="url(#nScoreLineGlow)"
                                         />
                                       )}
                                       {nPlotPoints.map((point, index) => (
-                                        <circle
-                                          key={`n-point-${index}`}
-                                          cx={point.x}
-                                          cy={point.y}
-                                          fill="#ffffff"
-                                          stroke="#e25566"
-                                          strokeWidth="0.8"
-                                          r="0.7"
-                                        />
+                                        <React.Fragment key={`n-point-${index}`}>
+                                          <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            fill="#e25566"
+                                            stroke="#ff8a95"
+                                            strokeWidth="0.7"
+                                            r="2.9"
+                                          />
+                                          <circle cx={point.x} cy={point.y} fill="#ffffff" r="0.7" />
+                                        </React.Fragment>
                                       ))}
                                     </svg>
                                   )}
