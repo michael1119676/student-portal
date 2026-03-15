@@ -99,7 +99,7 @@ type WeeklyWinner = {
 };
 
 type AdminPanelTab = "inventory" | "studentLogs" | "weeklyLogs" | "coinAdjust";
-type DrawCinematicPhase = "waiting" | "opening" | "result";
+type DrawCinematicPhase = "opening" | "result";
 
 type DrawResult = {
   drawLogId: number;
@@ -198,6 +198,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [weeklyWinners, setWeeklyWinners] = useState<WeeklyWinner[]>([]);
   const [inventoryBoxes, setInventoryBoxes] = useState<AdminInventoryBox[]>([]);
   const [inventoryBoxCode, setInventoryBoxCode] = useState("bronze");
+  const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryReason, setInventoryReason] = useState("");
   const [inventoryDraft, setInventoryDraft] = useState<Record<string, string>>({});
   const [newProductName, setNewProductName] = useState("");
@@ -276,10 +277,11 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     setStudents((data.students ?? []) as AdminStudent[]);
   }, [isAdmin]);
 
-  const fetchInventory = useCallback(
-    async (boxCode = inventoryBoxCode) => {
-      if (!isAdmin) return;
-      const res = await fetch(`/api/admin/shop/inventory?boxCode=${encodeURIComponent(boxCode)}`, {
+  const fetchInventory = useCallback(async () => {
+    if (!isAdmin) return;
+    setInventoryLoading(true);
+    try {
+      const res = await fetch("/api/admin/shop/inventory", {
         cache: "no-store",
       });
       const data = await res.json();
@@ -296,9 +298,13 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           return acc;
         }, {})
       );
-    },
-    [isAdmin, inventoryBoxCode]
-  );
+      if (nextBoxes.length > 0 && !nextBoxes.some((box) => box.code === inventoryBoxCode)) {
+        setInventoryBoxCode(nextBoxes[0].code);
+      }
+    } finally {
+      setInventoryLoading(false);
+    }
+  }, [isAdmin, inventoryBoxCode]);
 
   const fetchStudentLogs = async (studentId: string) => {
     if (!isAdmin || !studentId) return;
@@ -338,7 +344,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
         await fetchMyLogs();
         if (isAdmin) {
           await fetchAdminStudents();
-          await fetchInventory("bronze");
+          await fetchInventory();
           await fetchWeeklyWinners(1);
         }
       } catch (error) {
@@ -462,7 +468,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     setDrawResult(null);
     setDrawCinematic({
       boxCode,
-      phase: "waiting",
+      phase: "opening",
       resolvingResult: false,
     });
     drawRequestRef.current = requestDraw(boxCode);
@@ -470,18 +476,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
 
   const handleCinematicVideoEnded = async () => {
     if (!drawCinematic) return;
-
-    if (drawCinematic.phase === "waiting") {
-      setDrawCinematic((prev) =>
-        prev
-          ? {
-              ...prev,
-              phase: "opening",
-            }
-          : prev
-      );
-      return;
-    }
 
     if (drawCinematic.phase !== "opening") {
       return;
@@ -524,7 +518,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
         await fetchOverview();
         await fetchMyLogs();
         if (isAdmin) {
-          await fetchInventory(inventoryBoxCode);
+          await fetchInventory();
         }
       } catch (error) {
         setMessage((prev) =>
@@ -543,17 +537,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
 
   const handleCinematicVideoError = () => {
     if (!drawCinematic) return;
-    if (drawCinematic.phase === "waiting") {
-      setDrawCinematic((prev) =>
-        prev
-          ? {
-              ...prev,
-              phase: "opening",
-            }
-          : prev
-      );
-      return;
-    }
     if (drawCinematic.phase === "opening") {
       void handleCinematicVideoEnded();
     }
@@ -574,7 +557,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       }
       setMessage(data.message || "기본값 동기화를 완료했습니다.");
       await fetchOverview();
-      await fetchInventory(inventoryBoxCode);
+      await fetchInventory();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "기본값 동기화에 실패했습니다.");
     }
@@ -608,7 +591,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
 
     setMessage(data.message || "재고 수정 완료");
     await fetchOverview();
-    await fetchInventory(inventoryBoxCode);
+    await fetchInventory();
   };
 
   const handleAddProduct = async () => {
@@ -648,7 +631,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     setNewProductReason("");
     setNewProductRare(false);
     await fetchOverview();
-    await fetchInventory(inventoryBoxCode);
+    await fetchInventory();
   };
 
   const handleCoinAdjust = async () => {
@@ -695,9 +678,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     : "";
   const cinematicVideoSrc =
     drawCinematic && drawCinematic.phase !== "result"
-      ? BOX_VIDEO_ASSETS[drawCinematic.boxCode]?.[
-          drawCinematic.phase === "waiting" ? "waiting" : "opening"
-        ] ?? null
+      ? BOX_VIDEO_ASSETS[drawCinematic.boxCode]?.opening ?? null
       : null;
 
   return (
@@ -726,9 +707,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               <div className="w-full overflow-hidden rounded-[2rem] border border-white/20 bg-black/70 shadow-[0_30px_100px_rgba(0,0,0,0.6)]">
                 <div className="border-b border-white/10 px-6 py-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-amber-200/80">{cinematicBoxName}</p>
-                  <p className="mt-1 text-base font-medium text-white">
-                    {drawCinematic.phase === "waiting" ? "상자 소환 중..." : "상자 개봉 중..."}
-                  </p>
+                  <p className="mt-1 text-base font-medium text-white">상자 개봉 중...</p>
                 </div>
                 {cinematicVideoSrc ? (
                   <video
@@ -832,6 +811,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               const isOpening = openingBox === box.code;
               const soldOut = box.remainingCount === 0;
               const canOpen = coinBalance >= box.coinCost && !soldOut && !isOpening;
+              const waitingVideoSrc = BOX_VIDEO_ASSETS[box.code]?.waiting ?? null;
               return (
                 <Card
                   key={box.code}
@@ -853,12 +833,31 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="flex h-24 items-center justify-center rounded-2xl border border-white/10 bg-black/30">
-                      <Gift
-                        className={`h-10 w-10 text-amber-200 transition-all duration-500 ${
-                          isOpening ? "animate-pulse scale-110" : ""
-                        }`}
-                      />
+                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                      {waitingVideoSrc ? (
+                        <video
+                          key={`${box.code}-waiting`}
+                          src={waitingVideoSrc}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="h-24 w-full object-cover opacity-85"
+                        />
+                      ) : (
+                        <div className="flex h-24 items-center justify-center">
+                          <Gift
+                            className={`h-10 w-10 text-amber-200 transition-all duration-500 ${
+                              isOpening ? "animate-pulse scale-110" : ""
+                            }`}
+                          />
+                        </div>
+                      )}
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+                      <div className="pointer-events-none absolute bottom-2 right-3 text-[11px] tracking-wide text-white/80">
+                        대기 영상
+                      </div>
                     </div>
                     <Button
                       onClick={() => void handleDraw(box.code)}
@@ -997,7 +996,6 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         onChange={(e) => {
                           const value = e.target.value;
                           setInventoryBoxCode(value);
-                          void fetchInventory(value);
                         }}
                         className="h-11 rounded-xl border border-white/15 bg-black/30 px-3 text-white"
                       >
@@ -1045,48 +1043,56 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         </tr>
                       </thead>
                       <tbody>
-                        {(selectedInventoryBox?.products ?? []).map((product) => (
-                          <tr key={product.id} className="border-t border-white/10">
-                            <td className="px-3 py-2">{product.name}</td>
-                            <td className="px-3 py-2">{product.initialQuantity}</td>
-                            <td className="px-3 py-2">
-                              <Input
-                                value={inventoryDraft[product.id] ?? String(product.remainingQuantity)}
-                                onChange={(e) =>
-                                  setInventoryDraft((prev) => ({
-                                    ...prev,
-                                    [product.id]: e.target.value.replace(/[^\d-]/g, ""),
-                                  }))
-                                }
-                                className="h-9 w-24 rounded-lg border-white/15 bg-black/30 text-white"
-                              />
-                            </td>
-                            <td className="px-3 py-2">
-                              {product.baseProbabilityPercent === null
-                                ? "-"
-                                : product.baseProbabilityPercent.toFixed(4)}
-                            </td>
-                            <td className="px-3 py-2">
-                              {product.isRare ? (
-                                <span className="rounded-full border border-rose-300/35 bg-rose-500/20 px-2 py-0.5 text-xs text-rose-100">
-                                  희귀
-                                </span>
-                              ) : (
-                                "-"
-                              )}
-                            </td>
-                            <td className="px-3 py-2">
-                              <Button
-                                variant="secondary"
-                                className="rounded-lg bg-white/10 text-white hover:bg-white/20"
-                                onClick={() => void handleInventorySave(product.id)}
-                              >
-                                즉시 반영
-                              </Button>
+                        {inventoryLoading ? (
+                          <tr>
+                            <td colSpan={6} className="px-3 py-4 text-center text-white/55">
+                              재고 정보를 불러오는 중입니다...
                             </td>
                           </tr>
-                        ))}
-                        {!selectedInventoryBox?.products.length && (
+                        ) : (
+                          (selectedInventoryBox?.products ?? []).map((product) => (
+                            <tr key={product.id} className="border-t border-white/10">
+                              <td className="px-3 py-2">{product.name}</td>
+                              <td className="px-3 py-2">{product.initialQuantity}</td>
+                              <td className="px-3 py-2">
+                                <Input
+                                  value={inventoryDraft[product.id] ?? String(product.remainingQuantity)}
+                                  onChange={(e) =>
+                                    setInventoryDraft((prev) => ({
+                                      ...prev,
+                                      [product.id]: e.target.value.replace(/[^\d-]/g, ""),
+                                    }))
+                                  }
+                                  className="h-9 w-24 rounded-lg border-white/15 bg-black/30 text-white"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                {product.baseProbabilityPercent === null
+                                  ? "-"
+                                  : product.baseProbabilityPercent.toFixed(4)}
+                              </td>
+                              <td className="px-3 py-2">
+                                {product.isRare ? (
+                                  <span className="rounded-full border border-rose-300/35 bg-rose-500/20 px-2 py-0.5 text-xs text-rose-100">
+                                    희귀
+                                  </span>
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                <Button
+                                  variant="secondary"
+                                  className="rounded-lg bg-white/10 text-white hover:bg-white/20"
+                                  onClick={() => void handleInventorySave(product.id)}
+                                >
+                                  즉시 반영
+                                </Button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                        {!inventoryLoading && !selectedInventoryBox?.products.length && (
                           <tr>
                             <td colSpan={6} className="px-3 py-4 text-center text-white/55">
                               표시할 상품이 없습니다.
