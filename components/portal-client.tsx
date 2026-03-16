@@ -398,9 +398,6 @@ export default function PortalClient({
   const [newStudentClassName, setNewStudentClassName] = useState("");
   const [newStudentLoading, setNewStudentLoading] = useState(false);
   const [newStudentMessage, setNewStudentMessage] = useState("");
-  const historyReadyRef = useRef(false);
-  const isApplyingPopStateRef = useRef(false);
-  const lastHistoryKeyRef = useRef("");
   const studentProfileCacheRef = useRef<Record<string, StudentProfile | null>>({});
 
   const isLoggedIn = !!sessionUser;
@@ -479,94 +476,55 @@ export default function PortalClient({
     setTargetUniversity(getTargetUniversity(profileData?.target_university));
   }
 
+  function pushPortalHistoryEntry() {
+    if (typeof window === "undefined") return;
+    const state: PortalHistoryState = {
+      __portalNav: true,
+      selectedSeason,
+      adminStep,
+      selectedStudentId: selectedStudent?.id ?? null,
+    };
+    window.history.pushState(state, "", window.location.href);
+  }
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const initialState: PortalHistoryState = {
-      __portalNav: true,
-      selectedSeason: null,
-      adminStep: "home",
-      selectedStudentId: null,
-    };
-    const initialKey = JSON.stringify(initialState);
-    lastHistoryKeyRef.current = initialKey;
-    window.history.replaceState(initialState, "", window.location.href);
-    historyReadyRef.current = true;
-
-    const onPopState = (event: PopStateEvent) => {
-      const state = event.state as PortalHistoryState | null;
-      if (!state || state.__portalNav !== true) return;
-
-      isApplyingPopStateRef.current = true;
-
-      setSelectedSeason(state.selectedSeason ?? null);
-
-      if (isAdminMode) {
-        setAdminStep(state.adminStep ?? "home");
-        if (!state.selectedStudentId) {
-          setSelectedStudent(null);
-        } else {
-          const nextStudent =
-            adminStudents.find((student) => student.id === state.selectedStudentId) ?? null;
-          setSelectedStudent(nextStudent);
-          if (nextStudent) {
-            const cached = studentProfileCacheRef.current[nextStudent.id];
-            if (cached !== undefined) {
-              applyProfile(cached);
-            } else {
-              void fetch(`/api/admin/student?studentId=${encodeURIComponent(nextStudent.id)}`, {
-                cache: "no-store",
-              })
-                .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
-                .then(({ ok, data }) => {
-                  if (!ok) return;
-                  const profile = (data.profile as StudentProfile | undefined) ?? null;
-                  studentProfileCacheRef.current[nextStudent.id] = profile;
-                  applyProfile(profile);
-                })
-                .catch(() => {
-                  // Ignore popstate profile fetch failures and keep current UI state.
-                });
-            }
-          }
-        }
+    const onPopState = () => {
+      if (isEditingProfile) {
+        setIsEditingProfile(false);
+        setSaveMessage("");
+        setNewPin("");
+        return;
       }
 
-      lastHistoryKeyRef.current = JSON.stringify(state);
-      // Let React apply state updates first, then allow pushState again.
-      requestAnimationFrame(() => {
-        isApplyingPopStateRef.current = false;
-      });
+      if (selectedSeason !== null) {
+        setSelectedSeason(null);
+        return;
+      }
+
+      if (!isAdminMode) {
+        return;
+      }
+
+      if (selectedStudent) {
+        setSelectedStudent(null);
+        setSelectedSeason(null);
+        setAdminStep("search");
+        setSaveMessage("");
+        return;
+      }
+
+      if (adminStep !== "home") {
+        setAdminStep("home");
+      }
     };
 
     window.addEventListener("popstate", onPopState);
     return () => {
       window.removeEventListener("popstate", onPopState);
     };
-  }, [adminStudents, isAdminMode]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!historyReadyRef.current) return;
-
-    const nextState: PortalHistoryState = {
-      __portalNav: true,
-      selectedSeason,
-      adminStep,
-      selectedStudentId: selectedStudent?.id ?? null,
-    };
-    const nextKey = JSON.stringify(nextState);
-
-    if (nextKey === lastHistoryKeyRef.current) return;
-
-    if (isApplyingPopStateRef.current) {
-      lastHistoryKeyRef.current = nextKey;
-      return;
-    }
-
-    window.history.pushState(nextState, "", window.location.href);
-    lastHistoryKeyRef.current = nextKey;
-  }, [selectedSeason, adminStep, selectedStudent?.id]);
+  }, [adminStep, isAdminMode, isEditingProfile, selectedSeason, selectedStudent]);
 
   useEffect(() => {
     if (isAdminMode) {
@@ -1156,6 +1114,7 @@ export default function PortalClient({
 
     studentProfileCacheRef.current[student.id] =
       (data.profile as StudentProfile | undefined) ?? null;
+    pushPortalHistoryEntry();
     setSelectedStudent(student);
     applyProfile(data.profile as StudentProfile | undefined);
     setSelectedSeason(null);
@@ -1244,8 +1203,8 @@ export default function PortalClient({
   return (
     <div className="min-h-screen bg-[#06070a] text-white">
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.15),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_20%)]" />
-        <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.15),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_20%)]" />
+        <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
           <header className="flex flex-col gap-4 py-2 lg:flex-row lg:items-start lg:justify-between">
             {!canShowStudentPortal ? (
               <div className="text-sm uppercase tracking-[0.28em] text-white/45">
@@ -1473,7 +1432,10 @@ export default function PortalClient({
                     <div className="mx-auto grid w-full max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-5">
                       <button
                         type="button"
-                        onClick={() => setAdminStep("search")}
+                        onClick={() => {
+                          pushPortalHistoryEntry();
+                          setAdminStep("search");
+                        }}
                         className="group text-left"
                       >
                         <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
@@ -1496,6 +1458,7 @@ export default function PortalClient({
                       <button
                         type="button"
                         onClick={() => {
+                          pushPortalHistoryEntry();
                           setAdminStep("scores");
                           setAdminCutSeason(null);
                           setNCutSaveMessage("");
@@ -1521,6 +1484,7 @@ export default function PortalClient({
                       <button
                         type="button"
                         onClick={() => {
+                          pushPortalHistoryEntry();
                           setAdminStep("create");
                           setNewStudentMessage("");
                         }}
@@ -1544,7 +1508,10 @@ export default function PortalClient({
 
                       <button
                         type="button"
-                        onClick={() => setAdminStep("stats")}
+                        onClick={() => {
+                          pushPortalHistoryEntry();
+                          setAdminStep("stats");
+                        }}
                         className="group text-left"
                       >
                         <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
@@ -2364,11 +2331,15 @@ export default function PortalClient({
                     <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
                       {seasons.map((season, index) => (
                         <motion.button
+                          type="button"
                           key={season.id}
                           initial={{ opacity: 0, y: 14 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: index * 0.08 }}
-                          onClick={() => setSelectedSeason(season.id)}
+                          onClick={() => {
+                            pushPortalHistoryEntry();
+                            setSelectedSeason(season.id);
+                          }}
                           className="group text-left"
                         >
                           <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
