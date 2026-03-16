@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { buildShopDeliveryScheduleText } from "@/lib/shop";
 import { SessionUser } from "@/lib/session";
 
 type ShopBox = {
@@ -819,6 +820,21 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       }
 
       setMessage(data.message || "지급 상태를 반영했습니다.");
+      setWeeklyWinners((prev) =>
+        prev.map((winner) =>
+          winner.id !== drawLogId
+            ? winner
+            : {
+                ...winner,
+                deliveryCompleted,
+                deliveryScheduleText: buildShopDeliveryScheduleText({
+                  createdAt: winner.createdAt,
+                  productName: winner.productName,
+                  deliveryCompleted,
+                }),
+              }
+        )
+      );
       await fetchWeeklyWinners(week);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "지급 상태 수정에 실패했습니다.");
