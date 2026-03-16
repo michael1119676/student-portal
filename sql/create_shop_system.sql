@@ -151,6 +151,9 @@ as $$
       or p_product_name ~* '코인[^0-9]*[0-9]+[[:space:]]*개([[:space:]]*추가)?$'
       or (p_product_name ~* '코인' and p_product_name ~* '배')
       then 'instant'
+    when p_product_name ~* '골드바'
+      or p_product_name ~* '조말론'
+      then 'physical'
     when p_product_name ~* 'CU'
       or p_product_name ~* '스타벅스'
       or p_product_name ~* '굽네'
@@ -579,16 +582,17 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+#variable_conflict use_column
 declare
   v_log record;
   v_kind text;
   v_before boolean;
   v_after boolean;
 begin
-  select id, product_name, delivery_completed
+  select dl.id, dl.product_name, dl.delivery_completed
   into v_log
-  from public.draw_logs
-  where id = p_draw_log_id
+  from public.draw_logs as dl
+  where dl.id = p_draw_log_id
   for update;
 
   if not found then
@@ -605,12 +609,12 @@ begin
   v_before := coalesce(v_log.delivery_completed, false);
   v_after := coalesce(p_delivery_completed, false);
 
-  update public.draw_logs
+  update public.draw_logs as dl
   set
     delivery_completed = v_after,
     delivery_completed_at = case when v_after then now() else null end,
     delivery_updated_by = case when v_after then p_admin_id else null end
-  where id = p_draw_log_id;
+  where dl.id = p_draw_log_id;
 
   insert into public.admin_action_logs (
     admin_id,
@@ -624,15 +628,15 @@ begin
   )
   select
     p_admin_id,
-    student_id,
-    box_code,
+    dl.student_id,
+    dl.box_code,
     case when v_after then '상품 지급 처리' else '상품 지급 처리 취소' end,
     'delivery_status_update',
     jsonb_build_object('draw_log_id', p_draw_log_id, 'delivery_completed', v_before, 'product_name', v_log.product_name),
     jsonb_build_object('draw_log_id', p_draw_log_id, 'delivery_completed', v_after, 'product_name', v_log.product_name),
     now()
-  from public.draw_logs
-  where id = p_draw_log_id;
+  from public.draw_logs as dl
+  where dl.id = p_draw_log_id;
 
   return query
     select

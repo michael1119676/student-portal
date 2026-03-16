@@ -197,6 +197,10 @@ export function getShopProductDeliveryKind(productName: string): ShopDeliveryKin
     return "instant";
   }
 
+  if (normalized.includes("골드바") || normalized.includes("조말론")) {
+    return "physical";
+  }
+
   if (
     normalized.includes("cu") ||
     normalized.includes("스타벅스") ||
