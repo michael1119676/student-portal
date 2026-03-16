@@ -124,8 +124,8 @@ function toOneDecimal(value: number) {
 }
 
 function classOrder(className: string) {
-  if (className === "토요일반" || className.startsWith("토")) return 0;
-  if (className === "금요일반" || className.startsWith("금")) return 1;
+  if (className === "금요일반" || className.startsWith("금")) return 0;
+  if (className === "토요일반" || className.startsWith("토")) return 1;
   if (
     className === "영상반" ||
     className.startsWith("영상") ||

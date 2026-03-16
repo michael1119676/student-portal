@@ -903,6 +903,11 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           </div>
         </div>
 
+        <div className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/80">
+          기프티콘 상품은 매주 토요일에 지급되며, 실물 상품은 배송 일정에 따라 지급에 최대
+          2주 소요될 수 있습니다.
+        </div>
+
         <div className="rounded-2xl border border-amber-200/20 bg-amber-400/10 px-4 py-3">
           <p className="text-sm text-amber-100">
             현재 보유 코인: <span className="font-semibold">{coinBalance}</span>
