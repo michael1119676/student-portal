@@ -601,7 +601,9 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
 
     const result = response.result;
-    const bonusQueue = parseTicketRewardDrawQueue(result.productName);
+    // Auto-chain draw is allowed only when the server confirms ticket grant in message.
+    // This prevents paid auto-opens if product name parsing and DB grant state diverge.
+    const bonusQueue = parseTicketRewardDrawQueue(response.message);
     if (bonusQueue.length > 0) {
       enqueueAutoDraws(bonusQueue);
     }

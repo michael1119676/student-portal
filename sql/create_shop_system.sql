@@ -350,7 +350,10 @@ begin
   v_reward_multiplier := greatest(coalesce(v_selected.reward_coin_multiplier, 1.0), 0.0001);
 
   if v_reward_delta = 0 then
-    v_coin_delta_match := regexp_match(v_selected.product_name, '코인\s*([0-9]+)\s*개\s*추가');
+    v_coin_delta_match := regexp_match(
+      v_selected.product_name,
+      '코인[^0-9]*([0-9]+)[[:space:]]*개[[:space:]]*추가'
+    );
     if v_coin_delta_match is not null and array_length(v_coin_delta_match, 1) >= 1 then
       v_reward_delta := greatest(coalesce(v_coin_delta_match[1]::integer, 0), 0);
     end if;
@@ -359,7 +362,7 @@ begin
   if v_reward_multiplier = 1.0 then
     v_coin_multiplier_match := regexp_match(
       v_selected.product_name,
-      '코인(?:\s*개수)?\s*([0-9]+(?:\.[0-9]+)?)\s*배(?:\s*뽑기권)?'
+      '코인[^0-9]*([0-9]+(\.[0-9]+)?)[[:space:]]*배'
     );
     if v_coin_multiplier_match is not null and array_length(v_coin_multiplier_match, 1) >= 1 then
       v_reward_multiplier := greatest(coalesce(v_coin_multiplier_match[1]::numeric, 1.0), 0.0001);
@@ -376,7 +379,10 @@ begin
     v_coin_after := 0;
   end if;
 
-  v_ticket_match := regexp_match(v_selected.product_name, '(브론즈|실버|골드|다이아)\s*상자\s*([0-9]+)\s*회');
+  v_ticket_match := regexp_match(
+    v_selected.product_name,
+    '(브론즈|실버|골드|다이아)[[:space:]]*상자[^0-9]*([0-9]+)[[:space:]]*회'
+  );
   if v_ticket_match is not null and array_length(v_ticket_match, 1) >= 2 then
     v_grant_ticket_box_code := case v_ticket_match[1]
       when '브론즈' then 'bronze'
