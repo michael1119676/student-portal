@@ -471,11 +471,6 @@ export default function PortalClient({
 
   const nSmoothLinePath = useMemo(() => buildSmoothPath(nPlotPoints), [nPlotPoints]);
 
-  function goToShop() {
-    if (typeof window === "undefined") return;
-    window.location.assign("/shop");
-  }
-
   function applyProfile(profileData?: StudentProfile | null) {
     setSelectedKorean(profileData?.korean_subject || "언어와 매체");
     setSelectedMath(profileData?.math_subject || "미적분");
@@ -1571,10 +1566,6 @@ export default function PortalClient({
                       <a
                         href="/shop"
                         className="group text-left"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          goToShop();
-                        }}
                       >
                         <Card className="h-full rounded-[2rem] border border-amber-200/25 bg-amber-400/10 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-amber-400/15">
                           <CardHeader>
@@ -2350,10 +2341,6 @@ export default function PortalClient({
                       <a
                         href="/shop"
                         className="group block w-full text-left"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          goToShop();
-                        }}
                       >
                         <Card className="rounded-[2rem] border border-amber-200/25 bg-amber-400/10 text-white transition duration-300 group-hover:-translate-y-0.5 group-hover:border-amber-200/40 group-hover:bg-amber-400/15">
                           <CardHeader className="space-y-3">
