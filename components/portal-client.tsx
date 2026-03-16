@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -471,6 +470,11 @@ export default function PortalClient({
   }, [seasonNData]);
 
   const nSmoothLinePath = useMemo(() => buildSmoothPath(nPlotPoints), [nPlotPoints]);
+
+  function goToShop() {
+    if (typeof window === "undefined") return;
+    window.location.assign("/shop");
+  }
 
   function applyProfile(profileData?: StudentProfile | null) {
     setSelectedKorean(profileData?.korean_subject || "언어와 매체");
@@ -1564,7 +1568,14 @@ export default function PortalClient({
                         </Card>
                       </button>
 
-                      <Link href="/shop" className="group text-left">
+                      <a
+                        href="/shop"
+                        className="group text-left"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          goToShop();
+                        }}
+                      >
                         <Card className="h-full rounded-[2rem] border border-amber-200/25 bg-amber-400/10 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-amber-400/15">
                           <CardHeader>
                             <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-amber-300/20 text-amber-100 ring-1 ring-amber-200/30">
@@ -1579,7 +1590,7 @@ export default function PortalClient({
                             </CardDescription>
                           </CardHeader>
                         </Card>
-                      </Link>
+                      </a>
                     </div>
                   </div>
                 ) : adminStep === "scores" ? (
@@ -2336,7 +2347,14 @@ export default function PortalClient({
                     </div>
 
                     <div className="mx-auto w-full max-w-5xl">
-                      <Link href="/shop" className="group block w-full text-left">
+                      <a
+                        href="/shop"
+                        className="group block w-full text-left"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          goToShop();
+                        }}
+                      >
                         <Card className="rounded-[2rem] border border-amber-200/25 bg-amber-400/10 text-white transition duration-300 group-hover:-translate-y-0.5 group-hover:border-amber-200/40 group-hover:bg-amber-400/15">
                           <CardHeader className="space-y-3">
                             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-amber-200/35 bg-amber-400/20 px-3 py-1 text-xs text-amber-100">
@@ -2353,7 +2371,7 @@ export default function PortalClient({
                             </CardDescription>
                           </CardHeader>
                         </Card>
-                      </Link>
+                      </a>
                     </div>
 
                     <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
