@@ -292,7 +292,35 @@ function normalizePhone(phone: string) {
 
 function normalizeClassNameLabel(className: string | null | undefined) {
   if (!className) return className;
-  return className.trim() === "녹화강의반" ? "영상반" : className;
+  const normalized = className.trim();
+  if (normalized === "녹화강의반") return "영상반";
+  return normalized;
+}
+
+function classStatOrder(className: string | null | undefined) {
+  const normalized = normalizeClassNameLabel(className)?.trim() ?? "";
+  if (normalized === "금요일반" || normalized.startsWith("금")) return 0;
+  if (normalized === "토요일반" || normalized.startsWith("토")) return 1;
+  if (
+    normalized === "영상반" ||
+    normalized === "녹화강의반" ||
+    normalized.startsWith("영상") ||
+    normalized.startsWith("녹")
+  )
+    return 2;
+  if (normalized === "전체") return 3;
+  return 4;
+}
+
+function sortClassStats<T extends { className: string }>(rows: T[]) {
+  return [...rows].sort((a, b) => {
+    const rankDiff = classStatOrder(a.className) - classStatOrder(b.className);
+    if (rankDiff !== 0) return rankDiff;
+    return normalizeClassNameLabel(a.className)?.localeCompare(
+      normalizeClassNameLabel(b.className) ?? "",
+      "ko-KR"
+    ) ?? 0;
+  });
 }
 
 function ScriptLogo() {
@@ -856,7 +884,7 @@ export default function PortalClient({
       return;
     }
 
-    const classRows = adminStats.classStats
+    const classRows = sortClassStats(adminStats.classStats)
       .map(
         (row) =>
           `<tr><td>${row.className}</td><td>${row.count}</td><td>${row.average}</td><td>${row.median}</td><td>${row.stdDev}</td><td>${row.max}</td><td>${row.min}</td></tr>`
@@ -1885,7 +1913,7 @@ export default function PortalClient({
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {adminStats.classStats.map((row) => (
+                                      {sortClassStats(adminStats.classStats).map((row) => (
                                         <tr key={row.className} className="border-t border-white/10">
                                           <td className="px-3 py-3">{row.className}</td>
                                           <td className="px-3 py-3">{row.count}</td>
@@ -2576,7 +2604,7 @@ export default function PortalClient({
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {selectedRoundDetail.classStats.map((row) => (
+                                      {sortClassStats(selectedRoundDetail.classStats).map((row) => (
                                         <tr key={row.className} className="border-t border-white/10">
                                           <td className="px-4 py-3">{row.className}</td>
                                           <td className="px-4 py-3">{row.count}</td>
@@ -2924,7 +2952,7 @@ export default function PortalClient({
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {selectedNRoundDetail.classStats.map((row) => (
+                                      {sortClassStats(selectedNRoundDetail.classStats).map((row) => (
                                         <tr key={row.className} className="border-t border-white/10">
                                           <td className="px-4 py-3">{row.className}</td>
                                           <td className="px-4 py-3">{row.count}</td>
