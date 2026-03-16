@@ -163,6 +163,34 @@ const BOX_VIDEO_ASSETS: Record<
   },
 };
 
+const BOX_KO_NAME_TO_CODE: Record<string, string> = {
+  브론즈: "bronze",
+  실버: "silver",
+  골드: "gold",
+  다이아: "diamond",
+};
+
+const BOX_CODE_TO_KO_NAME: Record<string, string> = {
+  bronze: "브론즈",
+  silver: "실버",
+  gold: "골드",
+  diamond: "다이아",
+};
+
+function parseTicketRewardDrawQueue(productName: string) {
+  const match = String(productName || "").match(
+    /(브론즈|실버|골드|다이아)\s*상자\s*([0-9]+)\s*회/i
+  );
+  if (!match) return [] as string[];
+
+  const boxCode = BOX_KO_NAME_TO_CODE[match[1]];
+  const count = Number(match[2]);
+  if (!boxCode || !Number.isFinite(count) || count <= 0) return [] as string[];
+
+  const safeCount = Math.min(100, Math.max(0, Math.round(count)));
+  return Array.from({ length: safeCount }, () => boxCode);
+}
+
 function formatKst(value: string | null | undefined) {
   if (!value) return "-";
   const date = new Date(value);
@@ -203,6 +231,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const lastFeedIdRef = useRef(0);
   const drawRequestRef = useRef<Promise<DrawRequestResult> | null>(null);
   const drawCloseTimerRef = useRef<number | null>(null);
+  const autoDrawQueueRef = useRef<string[]>([]);
+  const [autoDrawRemainingCount, setAutoDrawRemainingCount] = useState(0);
   const [adminTab, setAdminTab] = useState<AdminPanelTab>("inventory");
   const [students, setStudents] = useState<AdminStudent[]>([]);
   const [studentQuery, setStudentQuery] = useState("");
@@ -474,24 +504,40 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
   };
 
-  const closeCinematic = () => {
-    if (drawCloseTimerRef.current) {
-      window.clearTimeout(drawCloseTimerRef.current);
-      drawCloseTimerRef.current = null;
-    }
-    drawRequestRef.current = null;
-    setDrawCinematic(null);
-    setDrawResult(null);
-    setOpeningBox(null);
+  const clearAutoDrawQueue = () => {
+    autoDrawQueueRef.current = [];
+    setAutoDrawRemainingCount(0);
   };
 
-  const handleDraw = (boxCode: string) => {
-    if (openingBox) return;
+  const enqueueAutoDraws = (boxCodes: string[]) => {
+    if (boxCodes.length === 0) return;
+    autoDrawQueueRef.current = [...autoDrawQueueRef.current, ...boxCodes];
+    setAutoDrawRemainingCount(autoDrawQueueRef.current.length);
+  };
+
+  const dequeueAutoDraw = () => {
+    const nextBoxCode = autoDrawQueueRef.current.shift() ?? null;
+    setAutoDrawRemainingCount(autoDrawQueueRef.current.length);
+    return nextBoxCode;
+  };
+
+  const startDraw = (
+    boxCode: string,
+    options?: {
+      fromAuto?: boolean;
+      queuedAfterCurrent?: number;
+    }
+  ) => {
     if (drawCloseTimerRef.current) {
       window.clearTimeout(drawCloseTimerRef.current);
       drawCloseTimerRef.current = null;
     }
-    setMessage("");
+    if (options?.fromAuto) {
+      const remainingIncludingCurrent = (options.queuedAfterCurrent ?? 0) + 1;
+      setMessage(`보너스 상자 자동 개봉 진행 중... (${remainingIncludingCurrent}회 남음)`);
+    } else {
+      setMessage("");
+    }
     setOpeningBox(boxCode);
     setDrawResult(null);
     setDrawCinematic({
@@ -500,6 +546,36 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       resolvingResult: false,
     });
     drawRequestRef.current = requestDraw(boxCode);
+  };
+
+  const closeCinematic = (options?: { continueAuto?: boolean }) => {
+    if (drawCloseTimerRef.current) {
+      window.clearTimeout(drawCloseTimerRef.current);
+      drawCloseTimerRef.current = null;
+    }
+    drawRequestRef.current = null;
+    setDrawCinematic(null);
+    setDrawResult(null);
+    setOpeningBox(null);
+
+    if (options?.continueAuto === false) return;
+
+    const nextBoxCode = dequeueAutoDraw();
+    if (!nextBoxCode) return;
+
+    const queuedAfterCurrent = autoDrawQueueRef.current.length;
+    window.setTimeout(() => {
+      startDraw(nextBoxCode, { fromAuto: true, queuedAfterCurrent });
+    }, 180);
+  };
+
+  const handleDraw = (boxCode: string) => {
+    if (openingBox) return;
+    if (autoDrawQueueRef.current.length > 0) {
+      setMessage("보너스 상자 자동 개봉이 진행 중입니다. 잠시만 기다려 주세요.");
+      return;
+    }
+    startDraw(boxCode);
   };
 
   const handleCinematicVideoEnded = async () => {
@@ -518,20 +594,29 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     drawRequestRef.current = null;
 
     if (!response.ok) {
-      closeCinematic();
+      clearAutoDrawQueue();
+      closeCinematic({ continueAuto: false });
       setMessage(response.message || "상자 열기에 실패했습니다.");
       return;
     }
 
     const result = response.result;
+    const bonusQueue = parseTicketRewardDrawQueue(result.productName);
+    if (bonusQueue.length > 0) {
+      enqueueAutoDraws(bonusQueue);
+    }
     setDrawResult(result);
     setDrawCinematic({
       boxCode: result.boxCode,
       phase: "result",
       resolvingResult: false,
     });
+    const bonusNotice =
+      bonusQueue.length > 0
+        ? ` → ${BOX_CODE_TO_KO_NAME[bonusQueue[0]] ?? bonusQueue[0]} 상자 ${bonusQueue.length}회 자동 개봉`
+        : "";
     setMessage(
-      `${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨! (코인 ${result.coinBefore} → ${result.coinAfter})`
+      `${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨! (코인 ${result.coinBefore} → ${result.coinAfter})${bonusNotice}`
     );
 
     void (async () => {
@@ -549,10 +634,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     })();
 
     drawCloseTimerRef.current = window.setTimeout(() => {
-      setDrawCinematic(null);
-      setDrawResult(null);
-      setOpeningBox(null);
-      drawCloseTimerRef.current = null;
+      closeCinematic();
     }, 10000);
   };
 
@@ -913,6 +995,12 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             현재 보유 코인: <span className="font-semibold">{coinBalance}</span>
           </p>
         </div>
+
+        {autoDrawRemainingCount > 0 && (
+          <div className="rounded-2xl border border-amber-200/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+            보너스 상자 자동 개봉 대기: {autoDrawRemainingCount}회
+          </div>
+        )}
 
         <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
           <p className="mb-2 text-xs text-white/60">희귀 당첨 내역</p>
