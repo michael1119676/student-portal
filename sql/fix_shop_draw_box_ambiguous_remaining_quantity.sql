@@ -1,7 +1,7 @@
 create table if not exists public.student_box_tickets (
   id bigserial primary key,
   student_id uuid not null references public.students(id) on delete cascade,
-  box_code text not null check (box_code in ('bronze', 'silver', 'gold', 'diamond')),
+  box_code text not null check (box_code in ('roulette', 'bronze', 'silver', 'gold', 'diamond')),
   remaining_count integer not null default 0 check (remaining_count >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -13,6 +13,41 @@ create index if not exists idx_student_box_tickets_student_id
 
 alter table public.student_box_tickets enable row level security;
 revoke all on public.student_box_tickets from anon, authenticated;
+
+alter table public.draw_logs
+  add column if not exists delivery_completed boolean not null default false;
+
+alter table public.draw_logs
+  add column if not exists delivery_completed_at timestamptz;
+
+alter table public.draw_logs
+  add column if not exists delivery_updated_by uuid references public.students(id) on delete set null;
+
+create or replace function public.shop_delivery_kind(
+  p_product_name text
+)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when p_product_name is null or btrim(p_product_name) = '' then 'instant'
+    when p_product_name ~* '꽝'
+      or p_product_name ~* '뽑기권'
+      or p_product_name ~* '코인[^0-9]*[0-9]+[[:space:]]*개([[:space:]]*추가)?$'
+      or (p_product_name ~* '코인' and p_product_name ~* '배')
+      then 'instant'
+    when p_product_name ~* 'CU'
+      or p_product_name ~* '스타벅스'
+      or p_product_name ~* '굽네'
+      or p_product_name ~* '베스킨'
+      or p_product_name ~* '페레로'
+      or p_product_name ~* '페로로'
+      or p_product_name ~* '마이쮸'
+      then 'gifticon'
+    else 'physical'
+  end
+$$;
 
 create or replace function public.shop_draw_box(
   p_student_id uuid,
@@ -51,6 +86,8 @@ declare
   v_reason text;
   v_reward_delta integer := 0;
   v_reward_multiplier numeric(10, 4) := 1.0;
+  v_delivery_kind text;
+  v_delivery_completed boolean := false;
   v_used_ticket boolean := false;
   v_ticket_before integer := 0;
   v_ticket_after integer := 0;
@@ -260,6 +297,9 @@ begin
     v_coin_after := 0;
   end if;
 
+  v_delivery_kind := public.shop_delivery_kind(v_selected.product_name);
+  v_delivery_completed := v_delivery_kind = 'instant';
+
   v_ticket_match := regexp_match(
     v_selected.product_name,
     '(브론즈|실버|골드|다이아)[[:space:]]*상자[^0-9]*([0-9]+)[[:space:]]*회'
@@ -314,6 +354,9 @@ begin
     inventory_after,
     coin_before,
     coin_after,
+    delivery_completed,
+    delivery_completed_at,
+    delivery_updated_by,
     actor_role,
     actor_id,
     created_at
@@ -331,6 +374,9 @@ begin
     v_inventory_after,
     v_coin_before,
     v_coin_after,
+    v_delivery_completed,
+    case when v_delivery_completed then now() else null end,
+    case when v_delivery_completed then p_actor_id else null end,
     case when p_actor_role in ('student', 'admin', 'system') then p_actor_role else 'student' end,
     p_actor_id,
     now()

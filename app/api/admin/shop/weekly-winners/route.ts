@@ -4,7 +4,12 @@ import {
   requireAdmin,
   unauthorizedResponse,
 } from "@/lib/api-auth";
-import { getNSeasonWeekRange } from "@/lib/shop";
+import {
+  buildShopDeliveryScheduleText,
+  getNSeasonWeekRange,
+  getShopProductDeliveryKind,
+  isShopDeliveryToggleAllowed,
+} from "@/lib/shop";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: Request) {
@@ -19,15 +24,29 @@ export async function GET(request: Request) {
   const { week, startUtc, endUtcExclusive } = getNSeasonWeekRange(weekRaw);
 
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("draw_logs")
     .select(
-      "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot"
+      "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot, delivery_completed"
     )
     .gte("created_at", startUtc.toISOString())
     .lt("created_at", endUtcExclusive.toISOString())
     .order("created_at", { ascending: false })
     .limit(5000);
+
+  if (error?.message.includes("delivery_completed")) {
+    const fallback = await supabase
+      .from("draw_logs")
+      .select(
+        "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot"
+      )
+      .gte("created_at", startUtc.toISOString())
+      .lt("created_at", endUtcExclusive.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    data = fallback.data as typeof data;
+    error = fallback.error;
+  }
 
   if (error) {
     return NextResponse.json(
@@ -48,10 +67,23 @@ export async function GET(request: Request) {
       createdAt: row.created_at,
       boxCode: row.box_code,
       productName: row.product_name,
+      deliveryKind: getShopProductDeliveryKind(row.product_name),
+      deliveryCompleted:
+        getShopProductDeliveryKind(row.product_name) === "instant"
+          ? true
+          : !!row.delivery_completed,
+      deliveryScheduleText: buildShopDeliveryScheduleText({
+        createdAt: row.created_at,
+        productName: row.product_name,
+        deliveryCompleted:
+          getShopProductDeliveryKind(row.product_name) === "instant"
+            ? true
+            : !!row.delivery_completed,
+      }),
+      canToggleDelivery: isShopDeliveryToggleAllowed(row.product_name),
       studentId: row.student_id,
       studentName: row.student_name_snapshot,
       studentPhone: row.student_phone_snapshot,
     })),
   });
 }
-

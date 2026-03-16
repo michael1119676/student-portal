@@ -15,7 +15,7 @@ create table if not exists public.shop_boxes (
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (code in ('bronze', 'silver', 'gold', 'diamond'))
+  check (code in ('roulette', 'bronze', 'silver', 'gold', 'diamond'))
 );
 
 create table if not exists public.shop_products (
@@ -45,7 +45,7 @@ create table if not exists public.box_inventory (
 create table if not exists public.student_box_tickets (
   id bigserial primary key,
   student_id uuid not null references public.students(id) on delete cascade,
-  box_code text not null check (box_code in ('bronze', 'silver', 'gold', 'diamond')),
+  box_code text not null check (box_code in ('roulette', 'bronze', 'silver', 'gold', 'diamond')),
   remaining_count integer not null default 0 check (remaining_count >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -66,6 +66,9 @@ create table if not exists public.draw_logs (
   inventory_after integer not null,
   coin_before integer not null,
   coin_after integer not null,
+  delivery_completed boolean not null default false,
+  delivery_completed_at timestamptz,
+  delivery_updated_by uuid references public.students(id) on delete set null,
   actor_role text not null check (actor_role in ('student', 'admin', 'system')),
   actor_id uuid,
   created_at timestamptz not null default now()
@@ -134,6 +137,32 @@ create index if not exists idx_admin_action_logs_created_at on public.admin_acti
 create index if not exists idx_admin_action_logs_target_student_id on public.admin_action_logs (target_student_id, created_at desc);
 create index if not exists idx_student_box_tickets_student_id on public.student_box_tickets (student_id, box_code);
 
+create or replace function public.shop_delivery_kind(
+  p_product_name text
+)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when p_product_name is null or btrim(p_product_name) = '' then 'instant'
+    when p_product_name ~* '꽝'
+      or p_product_name ~* '뽑기권'
+      or p_product_name ~* '코인[^0-9]*[0-9]+[[:space:]]*개([[:space:]]*추가)?$'
+      or (p_product_name ~* '코인' and p_product_name ~* '배')
+      then 'instant'
+    when p_product_name ~* 'CU'
+      or p_product_name ~* '스타벅스'
+      or p_product_name ~* '굽네'
+      or p_product_name ~* '베스킨'
+      or p_product_name ~* '페레로'
+      or p_product_name ~* '페로로'
+      or p_product_name ~* '마이쮸'
+      then 'gifticon'
+    else 'physical'
+  end
+$$;
+
 create or replace function public.shop_draw_box(
   p_student_id uuid,
   p_box_code text,
@@ -171,6 +200,8 @@ declare
   v_reason text;
   v_reward_delta integer := 0;
   v_reward_multiplier numeric(10, 4) := 1.0;
+  v_delivery_kind text;
+  v_delivery_completed boolean := false;
   v_used_ticket boolean := false;
   v_ticket_before integer := 0;
   v_ticket_after integer := 0;
@@ -380,6 +411,9 @@ begin
     v_coin_after := 0;
   end if;
 
+  v_delivery_kind := public.shop_delivery_kind(v_selected.product_name);
+  v_delivery_completed := v_delivery_kind = 'instant';
+
   v_ticket_match := regexp_match(
     v_selected.product_name,
     '(브론즈|실버|골드|다이아)[[:space:]]*상자[^0-9]*([0-9]+)[[:space:]]*회'
@@ -434,6 +468,9 @@ begin
     inventory_after,
     coin_before,
     coin_after,
+    delivery_completed,
+    delivery_completed_at,
+    delivery_updated_by,
     actor_role,
     actor_id,
     created_at
@@ -451,6 +488,9 @@ begin
     v_inventory_after,
     v_coin_before,
     v_coin_after,
+    v_delivery_completed,
+    case when v_delivery_completed then now() else null end,
+    case when v_delivery_completed then p_actor_id else null end,
     case when p_actor_role in ('student', 'admin', 'system') then p_actor_role else 'student' end,
     p_actor_id,
     now()
@@ -522,6 +562,83 @@ begin
       v_coin_after,
       v_inventory_after,
       coalesce(v_selected.is_rare, false);
+end;
+$$;
+
+create or replace function public.shop_admin_set_delivery_status(
+  p_admin_id uuid,
+  p_draw_log_id bigint,
+  p_delivery_completed boolean
+)
+returns table (
+  ok boolean,
+  message text,
+  delivery_completed boolean
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_log record;
+  v_kind text;
+  v_before boolean;
+  v_after boolean;
+begin
+  select id, product_name, delivery_completed
+  into v_log
+  from public.draw_logs
+  where id = p_draw_log_id
+  for update;
+
+  if not found then
+    return query select false, '당첨 로그를 찾을 수 없습니다.', null::boolean;
+    return;
+  end if;
+
+  v_kind := public.shop_delivery_kind(v_log.product_name);
+  if v_kind = 'instant' then
+    return query select false, '즉시 지급 상품은 수동 지급 처리 대상이 아닙니다.', v_log.delivery_completed;
+    return;
+  end if;
+
+  v_before := coalesce(v_log.delivery_completed, false);
+  v_after := coalesce(p_delivery_completed, false);
+
+  update public.draw_logs
+  set
+    delivery_completed = v_after,
+    delivery_completed_at = case when v_after then now() else null end,
+    delivery_updated_by = case when v_after then p_admin_id else null end
+  where id = p_draw_log_id;
+
+  insert into public.admin_action_logs (
+    admin_id,
+    target_student_id,
+    target_box_code,
+    reason,
+    action_type,
+    before_data,
+    after_data,
+    created_at
+  )
+  select
+    p_admin_id,
+    student_id,
+    box_code,
+    case when v_after then '상품 지급 처리' else '상품 지급 처리 취소' end,
+    'delivery_status_update',
+    jsonb_build_object('draw_log_id', p_draw_log_id, 'delivery_completed', v_before, 'product_name', v_log.product_name),
+    jsonb_build_object('draw_log_id', p_draw_log_id, 'delivery_completed', v_after, 'product_name', v_log.product_name),
+    now()
+  from public.draw_logs
+  where id = p_draw_log_id;
+
+  return query
+    select
+      true,
+      case when v_after then '지급 완료 처리했습니다.' else '지급 완료 처리를 취소했습니다.' end,
+      v_after;
 end;
 $$;
 

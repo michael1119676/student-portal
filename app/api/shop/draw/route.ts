@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     .trim()
     .toLowerCase();
 
-  if (!["bronze", "silver", "gold", "diamond"].includes(boxCode)) {
+  if (!["roulette", "bronze", "silver", "gold", "diamond"].includes(boxCode)) {
     return NextResponse.json(
       { ok: false, message: "상자 종류가 올바르지 않습니다." },
       { status: 400 }

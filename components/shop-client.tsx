@@ -36,6 +36,9 @@ type MyLog = {
   coinAfter: number;
   productName: string;
   boxCode: string | null;
+  deliveryKind: string | null;
+  deliveryCompleted: boolean;
+  deliveryScheduleText: string;
 };
 
 type AdminStudent = {
@@ -94,6 +97,10 @@ type WeeklyWinner = {
   createdAt: string;
   boxCode: string;
   productName: string;
+  deliveryKind: string;
+  deliveryCompleted: boolean;
+  deliveryScheduleText: string;
+  canToggleDelivery: boolean;
   studentId: string;
   studentName: string;
   studentPhone: string;
@@ -164,6 +171,7 @@ const BOX_VIDEO_ASSETS: Record<
 };
 
 const BOX_KO_NAME_TO_CODE: Record<string, string> = {
+  룰렛: "roulette",
   브론즈: "bronze",
   실버: "silver",
   골드: "gold",
@@ -171,6 +179,7 @@ const BOX_KO_NAME_TO_CODE: Record<string, string> = {
 };
 
 const BOX_CODE_TO_KO_NAME: Record<string, string> = {
+  roulette: "룰렛",
   bronze: "브론즈",
   silver: "실버",
   gold: "골드",
@@ -208,6 +217,7 @@ function formatKst(value: string | null | undefined) {
 }
 
 function boxBadgeClass(code: string) {
+  if (code === "roulette") return "from-emerald-500/75 to-lime-200/20";
   if (code === "bronze") return "from-amber-700/60 to-amber-500/20";
   if (code === "silver") return "from-slate-400/60 to-slate-100/20";
   if (code === "gold") return "from-yellow-500/70 to-yellow-200/20";
@@ -256,6 +266,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [probabilityModalOpen, setProbabilityModalOpen] = useState(false);
   const [probabilityLoading, setProbabilityLoading] = useState(false);
   const [probabilityBoxes, setProbabilityBoxes] = useState<ProbabilityBox[]>([]);
+  const [deliveryUpdatingId, setDeliveryUpdatingId] = useState<number | null>(null);
   const isAdmin = initialUser.role === "admin";
 
   const filteredStudents = useMemo(() => {
@@ -298,7 +309,10 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const tickerText = useMemo(() => {
     if (feed.length === 0) return "아직 희귀 당첨 기록이 없습니다.";
     return feed
-      .map((item) => `${item.maskedName} 학생 ${item.boxCode.toUpperCase()} 상자 ${item.productName} 당첨`)
+      .map(
+        (item) =>
+          `${item.maskedName} 학생 ${BOX_CODE_TO_KO_NAME[item.boxCode] ?? item.boxCode.toUpperCase()} 상자 ${item.productName} 당첨`
+      )
       .join("   ✦   ");
   }, [feed]);
 
@@ -504,6 +518,63 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
   };
 
+  const resolveOpeningResult = async (requestedBoxCode: string) => {
+    if (!drawRequestRef.current) return;
+
+    setDrawCinematic((prev) =>
+      prev && prev.phase === "opening" && prev.boxCode === requestedBoxCode
+        ? { ...prev, resolvingResult: true }
+        : prev
+    );
+
+    const response = await drawRequestRef.current;
+    drawRequestRef.current = null;
+
+    if (!response.ok) {
+      clearAutoDrawQueue();
+      closeCinematic({ continueAuto: false });
+      setMessage(response.message || "상자 열기에 실패했습니다.");
+      return;
+    }
+
+    const result = response.result;
+    const bonusQueue = parseTicketRewardDrawQueue(response.message);
+    if (bonusQueue.length > 0) {
+      enqueueAutoDraws(bonusQueue);
+    }
+    setDrawResult(result);
+    setDrawCinematic({
+      boxCode: result.boxCode,
+      phase: "result",
+      resolvingResult: false,
+    });
+    const bonusNotice =
+      bonusQueue.length > 0
+        ? ` → ${BOX_CODE_TO_KO_NAME[bonusQueue[0]] ?? bonusQueue[0]} 상자 ${bonusQueue.length}회 자동 개봉`
+        : "";
+    setMessage(
+      `${BOX_CODE_TO_KO_NAME[result.boxCode] ?? String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨! (코인 ${result.coinBefore} → ${result.coinAfter})${bonusNotice}`
+    );
+
+    void (async () => {
+      try {
+        await fetchOverview();
+        await fetchMyLogs();
+        if (isAdmin) {
+          await fetchInventory();
+        }
+      } catch (error) {
+        setMessage((prev) =>
+          prev || (error instanceof Error ? error.message : "상점 정보를 새로고침하지 못했습니다.")
+        );
+      }
+    })();
+
+    drawCloseTimerRef.current = window.setTimeout(() => {
+      closeCinematic();
+    }, 10000);
+  };
+
   const clearAutoDrawQueue = () => {
     autoDrawQueueRef.current = [];
     setAutoDrawRemainingCount(0);
@@ -546,6 +617,11 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       resolvingResult: false,
     });
     drawRequestRef.current = requestDraw(boxCode);
+    if (!BOX_VIDEO_ASSETS[boxCode]?.opening) {
+      window.setTimeout(() => {
+        void resolveOpeningResult(boxCode);
+      }, 1400);
+    }
   };
 
   const closeCinematic = (options?: { continueAuto?: boolean }) => {
@@ -584,60 +660,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     if (drawCinematic.phase !== "opening") {
       return;
     }
-
-    setDrawCinematic((prev) => (prev ? { ...prev, resolvingResult: true } : prev));
-    const response = await (drawRequestRef.current ??
-      Promise.resolve<DrawRequestResult>({
-        ok: false,
-        message: "상자 결과를 확인하지 못했습니다. 다시 시도해 주세요.",
-      }));
-    drawRequestRef.current = null;
-
-    if (!response.ok) {
-      clearAutoDrawQueue();
-      closeCinematic({ continueAuto: false });
-      setMessage(response.message || "상자 열기에 실패했습니다.");
-      return;
-    }
-
-    const result = response.result;
-    // Auto-chain draw is allowed only when the server confirms ticket grant in message.
-    // This prevents paid auto-opens if product name parsing and DB grant state diverge.
-    const bonusQueue = parseTicketRewardDrawQueue(response.message);
-    if (bonusQueue.length > 0) {
-      enqueueAutoDraws(bonusQueue);
-    }
-    setDrawResult(result);
-    setDrawCinematic({
-      boxCode: result.boxCode,
-      phase: "result",
-      resolvingResult: false,
-    });
-    const bonusNotice =
-      bonusQueue.length > 0
-        ? ` → ${BOX_CODE_TO_KO_NAME[bonusQueue[0]] ?? bonusQueue[0]} 상자 ${bonusQueue.length}회 자동 개봉`
-        : "";
-    setMessage(
-      `${String(result.boxCode).toUpperCase()} 상자에서 [${result.productName}] 당첨! (코인 ${result.coinBefore} → ${result.coinAfter})${bonusNotice}`
-    );
-
-    void (async () => {
-      try {
-        await fetchOverview();
-        await fetchMyLogs();
-        if (isAdmin) {
-          await fetchInventory();
-        }
-      } catch (error) {
-        setMessage((prev) =>
-          prev || (error instanceof Error ? error.message : "상점 정보를 새로고침하지 못했습니다.")
-        );
-      }
-    })();
-
-    drawCloseTimerRef.current = window.setTimeout(() => {
-      closeCinematic();
-    }, 10000);
+    await resolveOpeningResult(drawCinematic.boxCode);
   };
 
   const handleCinematicVideoError = () => {
@@ -778,8 +801,35 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
   };
 
+  const handleDeliveryToggle = async (drawLogId: number, deliveryCompleted: boolean) => {
+    setDeliveryUpdatingId(drawLogId);
+    try {
+      const res = await fetch("/api/admin/shop/delivery-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          drawLogId,
+          deliveryCompleted,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setMessage(data.message || "지급 상태 수정에 실패했습니다.");
+        return;
+      }
+
+      setMessage(data.message || "지급 상태를 반영했습니다.");
+      await fetchWeeklyWinners(week);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "지급 상태 수정에 실패했습니다.");
+    } finally {
+      setDeliveryUpdatingId(null);
+    }
+  };
+
   const cinematicBoxName = drawCinematic
-    ? boxNameMap[drawCinematic.boxCode] ?? `${drawCinematic.boxCode.toUpperCase()} 상자`
+    ? boxNameMap[drawCinematic.boxCode] ??
+      `${BOX_CODE_TO_KO_NAME[drawCinematic.boxCode] ?? drawCinematic.boxCode.toUpperCase()} 상자`
     : "";
   const cinematicVideoSrc =
     drawCinematic && drawCinematic.phase !== "result"
@@ -818,8 +868,14 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     onError={handleCinematicVideoError}
                   />
                 ) : (
-                  <div className="flex h-[56vh] items-center justify-center bg-black/70 text-white/70">
-                    영상을 불러오는 중...
+                  <div className="flex h-[56vh] flex-col items-center justify-center gap-4 bg-black/70 text-white/70">
+                    <RefreshCw className="h-10 w-10 animate-spin text-amber-200/80" />
+                    <div className="text-center">
+                      <p className="text-base font-medium text-white">상자를 개봉하고 있습니다...</p>
+                      <p className="mt-1 text-sm text-white/55">
+                        영상 없이 바로 결과를 계산하는 상자입니다.
+                      </p>
+                    </div>
                   </div>
                 )}
                 {drawCinematic.resolvingResult && (
@@ -1103,7 +1159,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead className="text-white/60">
                 <tr>
                   <th className="px-3 py-2 text-left">날짜&시각</th>
@@ -1112,6 +1168,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   <th className="px-3 py-2 text-left">변동 전 코인</th>
                   <th className="px-3 py-2 text-left">변동 후 코인</th>
                   <th className="px-3 py-2 text-left">획득 상품</th>
+                  <th className="px-3 py-2 text-left">지급 일정</th>
                 </tr>
               </thead>
               <tbody>
@@ -1123,11 +1180,12 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     <td className="px-3 py-2">{row.coinBefore}</td>
                     <td className="px-3 py-2">{row.coinAfter}</td>
                     <td className="px-3 py-2">{row.productName || "-"}</td>
+                    <td className="px-3 py-2">{row.deliveryScheduleText || "-"}</td>
                   </tr>
                 ))}
                 {!myLogs.length && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-4 text-center text-white/55">
+                    <td colSpan={7} className="px-3 py-4 text-center text-white/55">
                       아직 기록이 없습니다.
                     </td>
                   </tr>
@@ -1209,10 +1267,11 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         }}
                         className="h-11 rounded-xl border border-white/15 bg-black/30 px-3 text-white"
                       >
-                        <option value="bronze">브론즈</option>
-                        <option value="silver">실버</option>
-                        <option value="gold">골드</option>
-                        <option value="diamond">다이아</option>
+                        {inventoryBoxes.map((box) => (
+                          <option key={box.code} value={box.code}>
+                            {box.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div className="space-y-1">
@@ -1463,7 +1522,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     </select>
                   </div>
                   <div className="overflow-x-auto rounded-2xl border border-white/10">
-                    <table className="w-full min-w-[900px] text-sm">
+                    <table className="w-full min-w-[1220px] text-sm">
                       <thead className="bg-black/40 text-white/65">
                         <tr>
                           <th className="px-3 py-2 text-left">날짜/시간</th>
@@ -1471,21 +1530,46 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                           <th className="px-3 py-2 text-left">당첨 상품</th>
                           <th className="px-3 py-2 text-left">당첨자 이름</th>
                           <th className="px-3 py-2 text-left">당첨자 전화번호</th>
+                          <th className="px-3 py-2 text-left">지급 일정</th>
+                          <th className="px-3 py-2 text-left">처리</th>
                         </tr>
                       </thead>
                       <tbody>
                         {weeklyWinners.map((winner) => (
                           <tr key={winner.id} className="border-t border-white/10">
                             <td className="px-3 py-2">{formatKst(winner.createdAt)}</td>
-                            <td className="px-3 py-2">{winner.boxCode.toUpperCase()}</td>
+                            <td className="px-3 py-2">
+                              {BOX_CODE_TO_KO_NAME[winner.boxCode] ?? winner.boxCode.toUpperCase()}
+                            </td>
                             <td className="px-3 py-2">{winner.productName}</td>
                             <td className="px-3 py-2">{winner.studentName}</td>
                             <td className="px-3 py-2">{winner.studentPhone}</td>
+                            <td className="px-3 py-2">{winner.deliveryScheduleText}</td>
+                            <td className="px-3 py-2">
+                              {winner.canToggleDelivery ? (
+                                <Button
+                                  variant="secondary"
+                                  className="rounded-lg bg-white/10 text-white hover:bg-white/20"
+                                  disabled={deliveryUpdatingId === winner.id}
+                                  onClick={() =>
+                                    void handleDeliveryToggle(winner.id, !winner.deliveryCompleted)
+                                  }
+                                >
+                                  {deliveryUpdatingId === winner.id
+                                    ? "처리 중..."
+                                    : winner.deliveryCompleted
+                                      ? "지급 취소"
+                                      : "지급 처리"}
+                                </Button>
+                              ) : (
+                                <span className="text-white/45">자동 지급</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                         {!weeklyWinners.length && (
                           <tr>
-                            <td colSpan={5} className="px-3 py-4 text-center text-white/55">
+                            <td colSpan={7} className="px-3 py-4 text-center text-white/55">
                               선택한 주차의 당첨 기록이 없습니다.
                             </td>
                           </tr>

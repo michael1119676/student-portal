@@ -1,4 +1,5 @@
-export type ShopBoxCode = "bronze" | "silver" | "gold" | "diamond";
+export type ShopBoxCode = "roulette" | "bronze" | "silver" | "gold" | "diamond";
+export type ShopDeliveryKind = "instant" | "gifticon" | "physical";
 
 export type ShopBoxSeed = {
   code: ShopBoxCode;
@@ -18,6 +19,7 @@ export type ShopProductSeed = {
 };
 
 export const SHOP_BOX_DEFAULTS: Record<ShopBoxCode, ShopBoxSeed> = {
+  roulette: { code: "roulette", name: "1코인 룰렛", coinCost: 1, sortOrder: 0 },
   bronze: { code: "bronze", name: "브론즈 상자", coinCost: 2, sortOrder: 1 },
   silver: { code: "silver", name: "실버 상자", coinCost: 3, sortOrder: 2 },
   gold: { code: "gold", name: "골드 상자", coinCost: 7, sortOrder: 3 },
@@ -30,6 +32,14 @@ const STATIC_SHOP_PRODUCTS: Array<{
   quantity: number;
   baseProbabilityPercent?: number | null;
 }> = [
+  { boxCode: "roulette", name: "꽝!", quantity: 560000, baseProbabilityPercent: 53.8899 },
+  { boxCode: "roulette", name: "코인 1개", quantity: 250000, baseProbabilityPercent: 25 },
+  { boxCode: "roulette", name: "코인 2개", quantity: 150000, baseProbabilityPercent: 15 },
+  { boxCode: "roulette", name: "코인 5개", quantity: 50000, baseProbabilityPercent: 5 },
+  { boxCode: "roulette", name: "코인 10개", quantity: 10000, baseProbabilityPercent: 1 },
+  { boxCode: "roulette", name: "코인 30개", quantity: 1000, baseProbabilityPercent: 0.1 },
+  { boxCode: "roulette", name: "코인 50개", quantity: 100, baseProbabilityPercent: 0.01 },
+  { boxCode: "roulette", name: "코인 777개", quantity: 1, baseProbabilityPercent: 0.0001 },
   { boxCode: "bronze", name: "CU 마이쮸", quantity: 200000, baseProbabilityPercent: 98.35 },
   { boxCode: "bronze", name: "코인 10개 추가", quantity: 2000, baseProbabilityPercent: 1 },
   {
@@ -100,7 +110,9 @@ const STATIC_SHOP_PRODUCTS: Array<{
 ];
 
 function parseRewardCoinDelta(productName: string) {
-  const match = productName.match(/코인\s*([0-9]+)\s*개\s*추가/i);
+  const match =
+    productName.match(/코인\s*([0-9]+)\s*개\s*추가/i) ??
+    productName.match(/^코인\s*([0-9]+)\s*개$/i);
   if (!match) return 0;
   const value = Number(match[1]);
   if (!Number.isFinite(value)) return 0;
@@ -146,7 +158,7 @@ function buildProbabilityAndRarity(
 }
 
 export function loadShopCatalogDefaults() {
-  const boxes = (["bronze", "silver", "gold", "diamond"] as ShopBoxCode[]).map(
+  const boxes = (["roulette", "bronze", "silver", "gold", "diamond"] as ShopBoxCode[]).map(
     (code) => SHOP_BOX_DEFAULTS[code]
   );
 
@@ -166,6 +178,91 @@ export function loadShopCatalogDefaults() {
     products,
     sourceType: "defaults" as const,
   };
+}
+
+function normalizeProductName(value: string) {
+  return String(value || "").trim().toLowerCase();
+}
+
+export function getShopProductDeliveryKind(productName: string): ShopDeliveryKind {
+  const normalized = normalizeProductName(productName);
+  if (!normalized) return "instant";
+
+  if (
+    normalized.includes("꽝") ||
+    normalized.includes("뽑기권") ||
+    (normalized.includes("코인") && normalized.includes("배")) ||
+    /^코인\s*[0-9]+\s*개(?:\s*추가)?$/i.test(String(productName || ""))
+  ) {
+    return "instant";
+  }
+
+  if (
+    normalized.includes("cu") ||
+    normalized.includes("스타벅스") ||
+    normalized.includes("굽네") ||
+    normalized.includes("베스킨라빈스") ||
+    normalized.includes("베스킨") ||
+    normalized.includes("페레로") ||
+    normalized.includes("페로로") ||
+    normalized.includes("마이쮸")
+  ) {
+    return "gifticon";
+  }
+
+  return "physical";
+}
+
+export function isShopDeliveryToggleAllowed(productName: string) {
+  return getShopProductDeliveryKind(productName) !== "instant";
+}
+
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function getUpcomingSaturdayKst(value: string | Date | null | undefined, order: 1 | 2) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const kstDate = new Date(date.getTime() + KST_OFFSET_MS);
+  const diff = (6 - kstDate.getUTCDay() + 7) % 7 + (order - 1) * 7;
+  const targetUtcMs =
+    Date.UTC(kstDate.getUTCFullYear(), kstDate.getUTCMonth(), kstDate.getUTCDate() + diff) -
+    KST_OFFSET_MS;
+  return new Date(targetUtcMs);
+}
+
+export function formatShopDeliveryDate(value: string | Date | null | undefined) {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  }).format(date);
+}
+
+export function buildShopDeliveryScheduleText(options: {
+  createdAt: string | Date | null | undefined;
+  productName: string | null | undefined;
+  deliveryCompleted: boolean;
+}) {
+  const productName = String(options.productName || "").trim();
+  if (!productName || productName === "-") return "-";
+
+  const kind = getShopProductDeliveryKind(productName);
+  const receivedDate = formatShopDeliveryDate(options.createdAt);
+  if (kind === "instant" || options.deliveryCompleted) {
+    return `${receivedDate} · 지급완료`;
+  }
+
+  const targetDate = getUpcomingSaturdayKst(options.createdAt ?? null, kind === "gifticon" ? 1 : 2);
+  if (!targetDate) return "-";
+  return `${formatShopDeliveryDate(targetDate)} · 지급 예정`;
 }
 
 export function maskStudentName(name: string) {

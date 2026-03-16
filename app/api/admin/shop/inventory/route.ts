@@ -15,7 +15,7 @@ type InventorySetRpcResult = {
   quantity_after: number | null;
 };
 
-const VALID_BOXES = ["bronze", "silver", "gold", "diamond"] as const;
+const VALID_BOXES = ["roulette", "bronze", "silver", "gold", "diamond"] as const;
 
 export async function GET(request: Request) {
   const user = await getSessionUserFromCookies();

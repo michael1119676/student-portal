@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   const isRare = body.isRare === true;
   const reason = String(body.reason || "").trim();
 
-  if (!["bronze", "silver", "gold", "diamond"].includes(boxCode)) {
+  if (!["roulette", "bronze", "silver", "gold", "diamond"].includes(boxCode)) {
     return NextResponse.json(
       { ok: false, message: "상자 선택이 올바르지 않습니다." },
       { status: 400 }
@@ -99,4 +99,3 @@ export async function POST(request: Request) {
     productId: row.product_id,
   });
 }
-
