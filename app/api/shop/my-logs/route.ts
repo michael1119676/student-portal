@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
+import {
+  getSessionUserFromCookies,
+  resolveSessionUser,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET() {
@@ -7,12 +11,13 @@ export async function GET() {
   if (!user) return unauthorizedResponse();
 
   const supabase = createAdminClient();
+  const resolvedUser = await resolveSessionUser(supabase, user);
   const { data, error } = await supabase
     .from("coin_ledger")
     .select(
       "id, created_at, reason, delta, coin_before, coin_after, related_product_name, related_box_code"
     )
-    .eq("student_id", user.id)
+    .eq("student_id", resolvedUser.id)
     .order("created_at", { ascending: false })
     .limit(300);
 
@@ -37,4 +42,3 @@ export async function GET() {
     })),
   });
 }
-

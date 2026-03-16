@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
+import {
+  getSessionUserFromCookies,
+  resolveSessionUser,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { isShopSchemaReady, syncShopCatalogFromDefaults } from "@/lib/shop-db";
 import { maskStudentName } from "@/lib/shop";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -9,6 +13,7 @@ export async function GET() {
   if (!user) return unauthorizedResponse();
 
   const supabase = createAdminClient();
+  const resolvedUser = await resolveSessionUser(supabase, user);
   const schemaReady = await isShopSchemaReady(supabase);
   if (!schemaReady) {
     return NextResponse.json(
@@ -24,7 +29,7 @@ export async function GET() {
   const { data: me, error: meError } = await supabase
     .from("students")
     .select("id, coin_balance")
-    .eq("id", user.id)
+    .eq("id", resolvedUser.id)
     .maybeSingle();
 
   if (meError || !me) {
@@ -117,7 +122,7 @@ export async function GET() {
   const { data: ticketRows, error: ticketError } = await supabase
     .from("student_box_tickets")
     .select("box_code, remaining_count")
-    .eq("student_id", user.id);
+    .eq("student_id", resolvedUser.id);
 
   if (ticketError && !ticketError.message.includes("student_box_tickets")) {
     return NextResponse.json(
@@ -143,8 +148,8 @@ export async function GET() {
       code: box.code,
       name: box.name,
       coinCost: Number(box.coin_cost ?? 0),
-      remainingCount: user.role === "admin" ? remaining : null,
-      productCount: user.role === "admin" ? activeProducts.length : null,
+      remainingCount: resolvedUser.role === "admin" ? remaining : null,
+      productCount: resolvedUser.role === "admin" ? activeProducts.length : null,
       ticketCount: Number(ticketCountByBox.get(box.code) ?? 0),
     };
   });
@@ -172,7 +177,7 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    role: user.role,
+    role: resolvedUser.role,
     coinBalance: Number(me.coin_balance ?? 0),
     boxes: boxSummaries,
     recentFeed: (recentDraws ?? []).map((row) => ({
