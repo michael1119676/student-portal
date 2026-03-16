@@ -89,23 +89,23 @@ begin
   values (p_student_id, v_box.code, 0)
   on conflict (student_id, box_code) do nothing;
 
-  select remaining_count
+  select sbt.remaining_count
   into v_ticket_before
-  from public.student_box_tickets
-  where student_id = p_student_id
-    and box_code = v_box.code
+  from public.student_box_tickets sbt
+  where sbt.student_id = p_student_id
+    and sbt.box_code = v_box.code
   for update;
 
   v_ticket_before := coalesce(v_ticket_before, 0);
   if v_ticket_before > 0 then
     v_used_ticket := true;
-    update public.student_box_tickets
+    update public.student_box_tickets sbt
     set
-      remaining_count = greatest(remaining_count - 1, 0),
+      remaining_count = greatest(sbt.remaining_count - 1, 0),
       updated_at = now()
-    where student_id = p_student_id
-      and box_code = v_box.code
-    returning remaining_count into v_ticket_after;
+    where sbt.student_id = p_student_id
+      and sbt.box_code = v_box.code
+    returning sbt.remaining_count into v_ticket_after;
   else
     if v_coin_before < v_box.coin_cost then
       return query select false, '코인이 부족합니다.', null::bigint, v_box.code, null::text, v_coin_before, v_coin_before, null::integer, false;
