@@ -839,7 +839,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                 <div className="mt-7">
                   <Button
                     className="rounded-2xl bg-amber-300 px-6 text-black hover:bg-amber-200"
-                    onClick={closeCinematic}
+                    onClick={() => closeCinematic()}
                   >
                     확인
                   </Button>
