@@ -88,7 +88,7 @@ begin
 
   insert into public.student_box_tickets (student_id, box_code, remaining_count)
   values (p_student_id, v_box.code, 0)
-  on conflict (student_id, box_code) do nothing;
+  on conflict on constraint student_box_tickets_student_id_box_code_key do nothing;
 
   select sbt.remaining_count
   into v_ticket_before
@@ -287,7 +287,7 @@ begin
         v_grant_ticket_count,
         now()
       )
-      on conflict (student_id, box_code)
+      on conflict on constraint student_box_tickets_student_id_box_code_key
       do update
       set
         remaining_count = public.student_box_tickets.remaining_count + excluded.remaining_count,
