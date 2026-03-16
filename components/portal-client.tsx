@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PREMIUM_MONTH_ROUNDS, getPremiumRoundLabel } from "@/lib/season-premium";
 
 export type SessionUser = {
   id: string;
@@ -163,6 +164,79 @@ type SeasonNResponse = {
   message?: string;
 };
 
+type PremiumRoundSummary = {
+  round: number;
+  label: string;
+  averageScore: number;
+  myScore: number | null;
+};
+
+type PremiumRoundDetail = {
+  round: number;
+  label: string;
+  myScore: number | null;
+  averageScore: number;
+  classStats: Array<{
+    className: string;
+    average: number;
+    median: number;
+    stdDev: number;
+    max: number;
+    min: number;
+    count: number;
+  }>;
+};
+
+type PremiumSeasonResponse = {
+  ok: boolean;
+  season: "DP";
+  maxRound: number;
+  yMax: number;
+  binSize: number;
+  monthRounds: number[];
+  data: {
+    rounds: PremiumRoundSummary[];
+    details: PremiumRoundDetail[];
+  };
+  message?: string;
+};
+
+type SeasonNote = {
+  id: number | null;
+  studentId: string;
+  studentName?: string;
+  season: string;
+  round: number;
+  studentNote: string;
+  adminComment: string;
+  noteUpdatedAt: string | null;
+  noteUpdatedByRole: "student" | "admin" | null;
+  adminCommentUpdatedAt: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+  hasAdminComment: boolean;
+  status: "미댓글" | "댓글 완료" | "갱신됨";
+};
+
+type SeasonNoteResponse = {
+  ok: boolean;
+  message?: string;
+  note?: SeasonNote;
+};
+
+type AdminSeasonNoteItem = SeasonNote & {
+  studentId: string;
+  studentName: string;
+  studentPhone: string;
+  className: string | null;
+};
+
+type AdminSeasonNotesResponse = {
+  ok: boolean;
+  message?: string;
+  items?: AdminSeasonNoteItem[];
+};
+
 type AdminSeasonCutoffsResponse = {
   ok: boolean;
   message?: string;
@@ -180,8 +254,9 @@ type AdminStatsResponse = {
   ok: boolean;
   message?: string;
   stats?: {
-    season: "C" | "N";
+    season: "C" | "N" | "DP";
     round: number;
+    roundLabel?: string;
     participantCount: number;
     averageScore: number;
     maxScore: number;
@@ -215,14 +290,20 @@ type AdminStatsResponse = {
 type PortalHistoryState = {
   __portalNav: true;
   selectedSeason: string | null;
-  adminStep: "home" | "search" | "scores" | "stats" | "create";
+  adminStep: "home" | "search" | "scores" | "stats" | "create" | "notes";
   selectedStudentId: string | null;
 };
 
 const seasons = [
-  { id: "C", title: "C 시즌", subtitle: "C 시즌 성적 확인" },
-  { id: "N", title: "N 시즌", subtitle: "N 시즌 성적 확인" },
-  { id: "M", title: "M 시즌", subtitle: "M 시즌 성적 확인" },
+  { id: "C", badge: "C", title: "C 시즌", subtitle: "C 시즌 성적 확인" },
+  { id: "N", badge: "N", title: "N 시즌", subtitle: "N 시즌 성적 확인" },
+  { id: "M", badge: "M", title: "M 시즌", subtitle: "M 시즌 성적 확인" },
+  {
+    id: "DP",
+    badge: "더프",
+    title: "더프리미엄 모의고사",
+    subtitle: "월별 더프 물리학 II 통계 확인",
+  },
 ];
 
 const universityProfiles = {
@@ -323,6 +404,21 @@ function sortClassStats<T extends { className: string }>(rows: T[]) {
   });
 }
 
+function formatKst(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 function ScriptLogo() {
   return (
     <div className="relative inline-block">
@@ -393,7 +489,7 @@ export default function PortalClient({
   const [newPin, setNewPin] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
 
-  const [adminStep, setAdminStep] = useState<"home" | "search" | "scores" | "stats" | "create">(
+  const [adminStep, setAdminStep] = useState<"home" | "search" | "scores" | "stats" | "create" | "notes">(
     "home"
   );
   const [adminStudents, setAdminStudents] = useState<ManagedStudent[]>(managedStudents);
@@ -410,12 +506,17 @@ export default function PortalClient({
   const [seasonNError, setSeasonNError] = useState("");
   const [seasonNLoadedForId, setSeasonNLoadedForId] = useState<string | null>(null);
   const [selectedNRound, setSelectedNRound] = useState<number | null>(null);
+  const [premiumData, setPremiumData] = useState<PremiumSeasonResponse["data"] | null>(null);
+  const [premiumLoading, setPremiumLoading] = useState(false);
+  const [premiumError, setPremiumError] = useState("");
+  const [premiumLoadedForId, setPremiumLoadedForId] = useState<string | null>(null);
+  const [selectedPremiumRound, setSelectedPremiumRound] = useState<number | null>(null);
   const [adminCutSeason, setAdminCutSeason] = useState<"N" | "M" | null>(null);
   const [adminNInputRound, setAdminNInputRound] = useState(1);
   const [nCutInputs, setNCutInputs] = useState({ cut1: "", cut2: "", cut3: "" });
   const [nCutSaveMessage, setNCutSaveMessage] = useState("");
   const [nCutLoading, setNCutLoading] = useState(false);
-  const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N">("C");
+  const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N" | "DP">("C");
   const [statsRound, setStatsRound] = useState(1);
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
   const [adminStatsLoading, setAdminStatsLoading] = useState(false);
@@ -426,13 +527,33 @@ export default function PortalClient({
   const [newStudentClassName, setNewStudentClassName] = useState("");
   const [newStudentLoading, setNewStudentLoading] = useState(false);
   const [newStudentMessage, setNewStudentMessage] = useState("");
+  const [seasonNote, setSeasonNote] = useState<SeasonNote | null>(null);
+  const [seasonNoteLoading, setSeasonNoteLoading] = useState(false);
+  const [seasonNoteMessage, setSeasonNoteMessage] = useState("");
+  const [studentNoteDraft, setStudentNoteDraft] = useState("");
+  const [adminCommentDraft, setAdminCommentDraft] = useState("");
+  const [adminNotes, setAdminNotes] = useState<AdminSeasonNoteItem[]>([]);
+  const [adminNotesLoading, setAdminNotesLoading] = useState(false);
+  const [adminNotesMessage, setAdminNotesMessage] = useState("");
+  const [adminNotesQuery, setAdminNotesQuery] = useState("");
+  const [selectedAdminNoteId, setSelectedAdminNoteId] = useState<number | null>(null);
+  const [adminManagedNoteDraft, setAdminManagedNoteDraft] = useState("");
+  const [adminManagedCommentDraft, setAdminManagedCommentDraft] = useState("");
   const studentProfileCacheRef = useRef<Record<string, StudentProfile | null>>({});
 
   const isLoggedIn = !!sessionUser;
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
   const canShowStudentPortal = isAdminMode ? !!sessionUser && !!selectedStudent : isLoggedIn;
   const profile = universityProfiles[targetUniversity];
-  const statsRoundMax = statsSeason === "N" ? 12 : 10;
+  const statsRoundOptions = useMemo(
+    () =>
+      statsSeason === "N"
+        ? Array.from({ length: 12 }, (_, i) => i + 1)
+        : statsSeason === "DP"
+          ? [...PREMIUM_MONTH_ROUNDS]
+          : Array.from({ length: 10 }, (_, i) => i + 1),
+    [statsSeason]
+  );
 
   const canLogin = useMemo(() => {
     return (
@@ -482,6 +603,11 @@ export default function PortalClient({
     return seasonNData.details.find((detail) => detail.round === selectedNRound) ?? null;
   }, [seasonNData, selectedNRound]);
 
+  const selectedPremiumRoundDetail = useMemo(() => {
+    if (!premiumData || selectedPremiumRound === null) return null;
+    return premiumData.details.find((detail) => detail.round === selectedPremiumRound) ?? null;
+  }, [premiumData, selectedPremiumRound]);
+
   const nPlotPoints = useMemo(() => {
     if (!seasonNData || seasonNData.rounds.length === 0) return [];
     return seasonNData.rounds
@@ -495,6 +621,48 @@ export default function PortalClient({
   }, [seasonNData]);
 
   const nSmoothLinePath = useMemo(() => buildSmoothPath(nPlotPoints), [nPlotPoints]);
+
+  const premiumPlotPoints = useMemo(() => {
+    if (!premiumData || premiumData.rounds.length === 0) return [];
+    return premiumData.rounds
+      .map((round, index, arr) => {
+        if (round.myScore === null) return null;
+        const x = ((index + 0.5) / arr.length) * 100;
+        const y = 100 - round.myScore * 2;
+        return { x, y };
+      })
+      .filter((point): point is { x: number; y: number } => point !== null);
+  }, [premiumData]);
+
+  const premiumSmoothLinePath = useMemo(
+    () => buildSmoothPath(premiumPlotPoints),
+    [premiumPlotPoints]
+  );
+
+  const selectedAdminNote = useMemo(
+    () => adminNotes.find((item) => item.id === selectedAdminNoteId) ?? null,
+    [adminNotes, selectedAdminNoteId]
+  );
+
+  const currentNoteTarget = useMemo(() => {
+    if (!visibleUser?.id) return null;
+    if (selectedSeason === "C" && selectedRoundDetail) {
+      return { season: "C", round: selectedRoundDetail.round };
+    }
+    if (selectedSeason === "N" && selectedNRoundDetail) {
+      return { season: "N", round: selectedNRoundDetail.round };
+    }
+    if (selectedSeason === "DP" && selectedPremiumRoundDetail) {
+      return { season: "DP", round: selectedPremiumRoundDetail.round };
+    }
+    return null;
+  }, [
+    visibleUser?.id,
+    selectedSeason,
+    selectedRoundDetail,
+    selectedNRoundDetail,
+    selectedPremiumRoundDetail,
+  ]);
 
   function applyProfile(profileData?: StudentProfile | null) {
     setSelectedKorean(profileData?.korean_subject || "언어와 매체");
@@ -724,6 +892,77 @@ export default function PortalClient({
   }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode, seasonNData, seasonNLoadedForId, selectedNRound]);
 
   useEffect(() => {
+    if (selectedSeason !== "DP") return;
+    if (!canShowStudentPortal || !visibleUser?.id) return;
+    if (premiumData && premiumLoadedForId === visibleUser.id) {
+      setPremiumLoading(false);
+      setPremiumError("");
+      if (selectedPremiumRound === null) {
+        const defaultRound =
+          premiumData.rounds.find((round) => round.myScore !== null)?.round ?? PREMIUM_MONTH_ROUNDS[0];
+        setSelectedPremiumRound(defaultRound);
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPremium = async () => {
+      setPremiumLoading(true);
+      setPremiumError("");
+
+      const query = isAdminMode ? `?studentId=${encodeURIComponent(visibleUser.id)}` : "";
+
+      try {
+        const res = await fetch(`/api/season/premium${query}`, { cache: "no-store" });
+        const data = (await res.json()) as PremiumSeasonResponse;
+
+        if (!res.ok || !data.ok) {
+          if (!cancelled) {
+            setPremiumError(data.message || "더프리미엄 모의고사 데이터를 불러오지 못했습니다.");
+            setPremiumData(null);
+            setSelectedPremiumRound(null);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setPremiumData(data.data);
+          setPremiumLoadedForId(visibleUser.id);
+          const defaultRound =
+            data.data.rounds.find((round) => round.myScore !== null)?.round ?? PREMIUM_MONTH_ROUNDS[0];
+          setSelectedPremiumRound(defaultRound);
+        }
+      } catch {
+        if (!cancelled) {
+          setPremiumError("더프리미엄 모의고사 데이터를 불러오지 못했습니다.");
+          setPremiumData(null);
+          setPremiumLoadedForId(null);
+          setSelectedPremiumRound(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPremiumLoading(false);
+        }
+      }
+    };
+
+    void loadPremium();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedSeason,
+    canShowStudentPortal,
+    visibleUser?.id,
+    isAdminMode,
+    premiumData,
+    premiumLoadedForId,
+    selectedPremiumRound,
+  ]);
+
+  useEffect(() => {
     if (!selectedNRoundDetail) return;
     setNCutInputs({
       cut1: selectedNRoundDetail.cut1 === null ? "" : String(selectedNRoundDetail.cut1),
@@ -824,6 +1063,87 @@ export default function PortalClient({
     }
   }
 
+  async function handleSaveSeasonNote() {
+    if (!currentNoteTarget || !visibleUser?.id) return;
+
+    setSeasonNoteMessage("");
+
+    const res = await fetch("/api/season-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        studentId: isAdminMode ? visibleUser.id : undefined,
+        season: currentNoteTarget.season,
+        round: currentNoteTarget.round,
+        studentNote: studentNoteDraft,
+        adminComment: isAdminMode ? adminCommentDraft : undefined,
+      }),
+    });
+    const data = (await res.json()) as SeasonNoteResponse;
+    if (!res.ok || !data.ok) {
+      setSeasonNoteMessage(data.message || "메모 저장에 실패했습니다.");
+      return;
+    }
+
+    const query = new URLSearchParams({
+      season: currentNoteTarget.season,
+      round: String(currentNoteTarget.round),
+    });
+    if (isAdminMode) {
+      query.set("studentId", visibleUser.id);
+    }
+
+    const refreshRes = await fetch(`/api/season-notes?${query.toString()}`, {
+      cache: "no-store",
+    });
+    const refreshData = (await refreshRes.json()) as SeasonNoteResponse;
+    if (refreshRes.ok && refreshData.ok && refreshData.note) {
+      setSeasonNote(refreshData.note);
+      setStudentNoteDraft(refreshData.note.studentNote || "");
+      setAdminCommentDraft(refreshData.note.adminComment || "");
+      setSeasonNoteMessage("메모를 저장했습니다.");
+    } else {
+      setSeasonNoteMessage(refreshData.message || "메모 저장 후 새로고침에 실패했습니다.");
+    }
+  }
+
+  async function handleSaveAdminManagedNote() {
+    if (!selectedAdminNote) return;
+
+    setAdminNotesMessage("");
+
+    const res = await fetch("/api/season-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        studentId: selectedAdminNote.studentId,
+        season: selectedAdminNote.season,
+        round: selectedAdminNote.round,
+        studentNote: adminManagedNoteDraft,
+        adminComment: adminManagedCommentDraft,
+      }),
+    });
+    const data = (await res.json()) as SeasonNoteResponse;
+    if (!res.ok || !data.ok) {
+      setAdminNotesMessage(data.message || "메모 저장에 실패했습니다.");
+      return;
+    }
+
+    const query = adminNotesQuery.trim()
+      ? `?q=${encodeURIComponent(adminNotesQuery.trim())}`
+      : "";
+    const refreshRes = await fetch(`/api/admin/season-notes${query}`, { cache: "no-store" });
+    const refreshData = (await refreshRes.json()) as AdminSeasonNotesResponse;
+    if (refreshRes.ok && refreshData.ok) {
+      const nextItems = refreshData.items ?? [];
+      setAdminNotes(nextItems);
+      setSelectedAdminNoteId(selectedAdminNote.id);
+      setAdminNotesMessage("메모를 저장했습니다.");
+    } else {
+      setAdminNotesMessage(refreshData.message || "메모 저장 후 목록 갱신에 실패했습니다.");
+    }
+  }
+
   useEffect(() => {
     if (!isAdminMode || adminStep !== "stats") return;
 
@@ -871,9 +1191,128 @@ export default function PortalClient({
   }, [isAdminMode, adminStep, statsSeason, statsRound]);
 
   useEffect(() => {
-    if (statsRound <= statsRoundMax) return;
-    setStatsRound(statsRoundMax);
-  }, [statsRound, statsRoundMax]);
+    if (statsRoundOptions.includes(statsRound)) return;
+    setStatsRound(statsRoundOptions[0]);
+  }, [statsRound, statsRoundOptions]);
+
+  useEffect(() => {
+    if (!currentNoteTarget || !visibleUser?.id || !canShowStudentPortal) {
+      setSeasonNote(null);
+      setStudentNoteDraft("");
+      setAdminCommentDraft("");
+      setSeasonNoteMessage("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadNote = async () => {
+      setSeasonNoteLoading(true);
+      setSeasonNoteMessage("");
+
+      const query = new URLSearchParams({
+        season: currentNoteTarget.season,
+        round: String(currentNoteTarget.round),
+      });
+      if (isAdminMode) {
+        query.set("studentId", visibleUser.id);
+      }
+
+      try {
+        const res = await fetch(`/api/season-notes?${query.toString()}`, {
+          cache: "no-store",
+        });
+        const data = (await res.json()) as SeasonNoteResponse;
+        if (!res.ok || !data.ok || !data.note) {
+          if (!cancelled) {
+            setSeasonNote(null);
+            setStudentNoteDraft("");
+            setAdminCommentDraft("");
+            setSeasonNoteMessage(data.message || "메모를 불러오지 못했습니다.");
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setSeasonNote(data.note);
+          setStudentNoteDraft(data.note.studentNote || "");
+          setAdminCommentDraft(data.note.adminComment || "");
+        }
+      } catch {
+        if (!cancelled) {
+          setSeasonNote(null);
+          setStudentNoteDraft("");
+          setAdminCommentDraft("");
+          setSeasonNoteMessage("메모를 불러오지 못했습니다.");
+        }
+      } finally {
+        if (!cancelled) {
+          setSeasonNoteLoading(false);
+        }
+      }
+    };
+
+    void loadNote();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentNoteTarget, visibleUser?.id, canShowStudentPortal, isAdminMode]);
+
+  useEffect(() => {
+    if (!isAdminMode || adminStep !== "notes") return;
+
+    let cancelled = false;
+
+    const loadAdminNotes = async () => {
+      setAdminNotesLoading(true);
+      setAdminNotesMessage("");
+
+      try {
+        const query = adminNotesQuery.trim()
+          ? `?q=${encodeURIComponent(adminNotesQuery.trim())}`
+          : "";
+        const res = await fetch(`/api/admin/season-notes${query}`, { cache: "no-store" });
+        const data = (await res.json()) as AdminSeasonNotesResponse;
+
+        if (!res.ok || !data.ok) {
+          if (!cancelled) {
+            setAdminNotes([]);
+            setAdminNotesMessage(data.message || "메모 목록을 불러오지 못했습니다.");
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          const nextItems = data.items ?? [];
+          setAdminNotes(nextItems);
+          setSelectedAdminNoteId((prev) =>
+            prev && nextItems.some((item) => item.id === prev) ? prev : nextItems[0]?.id ?? null
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setAdminNotes([]);
+          setAdminNotesMessage("메모 목록을 불러오지 못했습니다.");
+        }
+      } finally {
+        if (!cancelled) {
+          setAdminNotesLoading(false);
+        }
+      }
+    };
+
+    void loadAdminNotes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminMode, adminStep, adminNotesQuery]);
+
+  useEffect(() => {
+    setAdminManagedNoteDraft(selectedAdminNote?.studentNote || "");
+    setAdminManagedCommentDraft(selectedAdminNote?.adminComment || "");
+  }, [selectedAdminNote]);
 
   function handleDownloadStatsPdf() {
     if (!adminStats) return;
@@ -904,7 +1343,7 @@ export default function PortalClient({
     const html = `
       <html>
         <head>
-          <title>${adminStats.season} 시즌 ${adminStats.round}회 통계</title>
+          <title>${adminStats.season === "DP" ? `더프리미엄 모의고사 ${adminStats.roundLabel ?? `${adminStats.round}월`}` : `${adminStats.season} 시즌 ${adminStats.round}회 통계`}</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 28px; color: #111; }
             h1 { margin: 0 0 8px; font-size: 26px; }
@@ -920,7 +1359,7 @@ export default function PortalClient({
           </style>
         </head>
         <body>
-          <h1>${adminStats.season} 시즌 ${adminStats.round}회 통계</h1>
+          <h1>${adminStats.season === "DP" ? `더프리미엄 모의고사 ${adminStats.roundLabel ?? `${adminStats.round}월`}` : `${adminStats.season} 시즌 ${adminStats.round}회 통계`}</h1>
           <p>전체 통계 및 반별 통계 리포트</p>
           <div class="cards">
             <div class="card"><div class="label">응시 인원</div><div class="value">${adminStats.participantCount}</div></div>
@@ -933,11 +1372,15 @@ export default function PortalClient({
             <thead><tr><th>반</th><th>인원</th><th>평균</th><th>중앙값</th><th>표준편차</th><th>최고</th><th>최저</th></tr></thead>
             <tbody>${classRows}</tbody>
           </table>
-          <h2>약점 문항(정답률 낮은 순)</h2>
+          ${
+            adminStats.weakQuestions.length > 0
+              ? `<h2>약점 문항(정답률 낮은 순)</h2>
           <table>
             <thead><tr><th>문항</th><th>정답</th><th>정답률</th><th>선택지 선택률</th></tr></thead>
             <tbody>${weakRows}</tbody>
-          </table>
+          </table>`
+              : `<h2>문항별 통계</h2><p>이 시험은 문항별 통계를 제공하지 않습니다.</p>`
+          }
         </body>
       </html>
     `;
@@ -1218,6 +1661,79 @@ export default function PortalClient({
     setIsEditingProfile(false);
     setSaveMessage("");
     setNewPin("");
+  }
+
+  function renderSeasonNoteCard(title: string) {
+    if (!currentNoteTarget || !visibleUser?.id) return null;
+
+    return (
+      <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-2xl">{title}</CardTitle>
+              <CardDescription className="text-white/55">
+                시험을 마친 뒤 느낀 점, 부족했던 점, 다음 회차에서 보완할 점을 자유롭게 적을 수 있습니다.
+              </CardDescription>
+            </div>
+            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/70">
+              상태: {seasonNote?.status ?? "미댓글"}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {seasonNoteLoading ? (
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-8 text-center text-white/65">
+              메모를 불러오는 중...
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label className="text-white/75">셀프 피드백</Label>
+                <textarea
+                  value={studentNoteDraft}
+                  onChange={(e) => setStudentNoteDraft(e.target.value)}
+                  placeholder="이번 시험에서 아쉬웠던 점, 시간 관리, 개념 실수, 다음 회차 목표 등을 적어주세요."
+                  className="min-h-[160px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/40"
+                />
+                <p className="text-xs text-white/45">
+                  최근 메모 수정: {formatKst(seasonNote?.noteUpdatedAt ?? null)}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-white/75">관리자 댓글</Label>
+                {isAdminMode ? (
+                  <textarea
+                    value={adminCommentDraft}
+                    onChange={(e) => setAdminCommentDraft(e.target.value)}
+                    placeholder="학생 메모에 대한 피드백을 댓글처럼 남길 수 있습니다."
+                    className="min-h-[120px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-300/40"
+                  />
+                ) : (
+                  <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-4 text-sm text-emerald-50/90">
+                    {seasonNote?.adminComment?.trim() ? seasonNote.adminComment : "아직 등록된 댓글이 없습니다."}
+                  </div>
+                )}
+                <p className="text-xs text-white/45">
+                  최근 댓글 수정: {formatKst(seasonNote?.adminCommentUpdatedAt ?? null)}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  className="rounded-2xl bg-white text-black hover:bg-white/90"
+                  onClick={handleSaveSeasonNote}
+                >
+                  메모 저장
+                </Button>
+              </div>
+              {seasonNoteMessage && <p className="text-sm text-white/65">{seasonNoteMessage}</p>}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
   }
 
   if (isCheckingSession) {
@@ -1558,6 +2074,31 @@ export default function PortalClient({
                         </Card>
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={() => {
+                          pushPortalHistoryEntry();
+                          setAdminStep("notes");
+                          setAdminNotesMessage("");
+                        }}
+                        className="group text-left"
+                      >
+                        <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
+                          <CardHeader>
+                            <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-cyan-400/10 text-cyan-200 ring-1 ring-cyan-300/20">
+                              <MessageCircleMore className="h-6 w-6" />
+                            </div>
+                            <CardTitle className="flex items-center justify-between text-2xl">
+                              메모 관리
+                              <ArrowRight className="h-5 w-5 text-white/45 transition-transform duration-200 group-hover:translate-x-1" />
+                            </CardTitle>
+                            <CardDescription className="text-base text-white/50">
+                              학생 메모를 최신 갱신 순으로 확인하고 댓글 상태를 관리합니다.
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      </button>
+
                       <a
                         href="/shop"
                         className="group text-left"
@@ -1807,6 +2348,181 @@ export default function PortalClient({
                       </CardContent>
                     </Card>
                   </div>
+                ) : adminStep === "notes" ? (
+                  <div className="mx-auto w-full max-w-7xl space-y-5">
+                    <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                      <CardHeader>
+                        <CardTitle className="text-3xl">메모 관리</CardTitle>
+                        <CardDescription className="text-white/55">
+                          학생 메모를 최신 갱신 순으로 확인하고 댓글 여부를 관리합니다.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        <div className="flex flex-wrap gap-3">
+                          <div className="min-w-[260px] flex-1">
+                            <Input
+                              value={adminNotesQuery}
+                              onChange={(e) => setAdminNotesQuery(e.target.value)}
+                              placeholder="학생 이름 / 전화번호 / 시즌 검색"
+                              className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
+                            />
+                          </div>
+                          <Button
+                            variant="secondary"
+                            className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                            onClick={() => setAdminStep("home")}
+                          >
+                            관리자 홈
+                          </Button>
+                        </div>
+
+                        {adminNotesMessage && (
+                          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
+                            {adminNotesMessage}
+                          </div>
+                        )}
+
+                        <div className="grid gap-5 xl:grid-cols-[1.12fr_0.88fr]">
+                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/20">
+                            <div className="border-b border-white/10 px-4 py-3 text-sm text-white/55">
+                              최신 메모 목록
+                            </div>
+                            <div className="max-h-[720px] overflow-auto">
+                              {adminNotesLoading ? (
+                                <div className="px-4 py-8 text-center text-sm text-white/60">
+                                  메모 목록을 불러오는 중...
+                                </div>
+                              ) : adminNotes.length === 0 ? (
+                                <div className="px-4 py-8 text-center text-sm text-white/60">
+                                  표시할 메모가 없습니다.
+                                </div>
+                              ) : (
+                                <table className="w-full min-w-[760px] text-sm">
+                                  <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
+                                    <tr>
+                                      <th className="px-4 py-3 text-left">갱신 시각</th>
+                                      <th className="px-4 py-3 text-left">학생</th>
+                                      <th className="px-4 py-3 text-left">시험</th>
+                                      <th className="px-4 py-3 text-left">상태</th>
+                                      <th className="px-4 py-3 text-left">메모</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {adminNotes.map((item) => (
+                                      <tr
+                                        key={item.id}
+                                        className={`cursor-pointer border-t border-white/10 transition hover:bg-white/5 ${
+                                          selectedAdminNoteId === item.id ? "bg-white/10" : ""
+                                        }`}
+                                        onClick={() => setSelectedAdminNoteId(item.id)}
+                                      >
+                                        <td className="px-4 py-3">{formatKst(item.noteUpdatedAt)}</td>
+                                        <td className="px-4 py-3">
+                                          {item.studentName}
+                                          <span className="ml-2 text-xs text-white/45">
+                                            {item.studentPhone}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          {item.season === "DP"
+                                            ? `더프 ${getPremiumRoundLabel(item.round)}`
+                                            : `${item.season} 시즌 ${item.round}회`}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <span
+                                            className={`rounded-full px-2.5 py-1 text-xs ${
+                                              item.status === "미댓글"
+                                                ? "bg-amber-300/15 text-amber-100"
+                                                : item.status === "갱신됨"
+                                                  ? "bg-cyan-300/15 text-cyan-100"
+                                                  : "bg-emerald-300/15 text-emerald-100"
+                                            }`}
+                                          >
+                                            {item.status}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-white/75">
+                                          {item.studentNote.slice(0, 72) || "-"}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </div>
+
+                          <Card className="rounded-[1.5rem] border border-white/10 bg-black/20 text-white shadow-none">
+                            <CardHeader>
+                              <CardTitle className="text-2xl">선택 메모</CardTitle>
+                              <CardDescription className="text-white/55">
+                                학생 메모와 관리자 댓글을 같은 화면에서 수정할 수 있습니다.
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              {!selectedAdminNote ? (
+                                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-10 text-center text-white/60">
+                                  왼쪽 목록에서 메모를 선택해 주세요.
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                                    <p className="text-lg font-semibold text-white">
+                                      {selectedAdminNote.studentName}
+                                    </p>
+                                    <p className="mt-1 text-sm text-white/55">
+                                      {selectedAdminNote.studentPhone}
+                                      {selectedAdminNote.className
+                                        ? ` · ${normalizeClassNameLabel(selectedAdminNote.className)}`
+                                        : ""}
+                                    </p>
+                                    <p className="mt-2 text-sm text-white/70">
+                                      {selectedAdminNote.season === "DP"
+                                        ? `더프리미엄 모의고사 ${getPremiumRoundLabel(selectedAdminNote.round)}`
+                                        : `${selectedAdminNote.season} 시즌 ${selectedAdminNote.round}회`}
+                                    </p>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label className="text-white/75">학생 메모</Label>
+                                    <textarea
+                                      value={adminManagedNoteDraft}
+                                      onChange={(e) => setAdminManagedNoteDraft(e.target.value)}
+                                      className="min-h-[180px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/40"
+                                    />
+                                    <p className="text-xs text-white/45">
+                                      최근 메모 갱신: {formatKst(selectedAdminNote.noteUpdatedAt)}
+                                    </p>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label className="text-white/75">관리자 댓글</Label>
+                                    <textarea
+                                      value={adminManagedCommentDraft}
+                                      onChange={(e) => setAdminManagedCommentDraft(e.target.value)}
+                                      className="min-h-[140px] w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-300/40"
+                                    />
+                                    <p className="text-xs text-white/45">
+                                      최근 댓글 수정: {formatKst(selectedAdminNote.adminCommentUpdatedAt)}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-3">
+                                    <Button
+                                      className="rounded-2xl bg-white text-black hover:bg-white/90"
+                                      onClick={handleSaveAdminManagedNote}
+                                    >
+                                      메모/댓글 저장
+                                    </Button>
+                                  </div>
+                                </>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 ) : adminStep === "stats" ? (
                   <div className="mx-auto w-full max-w-6xl space-y-5">
                     <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
@@ -1823,12 +2539,13 @@ export default function PortalClient({
                             <select
                               value={statsSeason}
                               onChange={(e) =>
-                                setStatsSeason(e.target.value as "C" | "M" | "N")
+                                setStatsSeason(e.target.value as "C" | "M" | "N" | "DP")
                               }
                               className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
                             >
                               <option value="C">C 시즌</option>
                               <option value="N">N 시즌</option>
+                              <option value="DP">더프리미엄 모의고사</option>
                               <option value="M">M 시즌</option>
                             </select>
                           </div>
@@ -1839,9 +2556,9 @@ export default function PortalClient({
                               onChange={(e) => setStatsRound(Number(e.target.value))}
                               className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
                             >
-                              {Array.from({ length: statsRoundMax }, (_, i) => i + 1).map((round) => (
+                              {statsRoundOptions.map((round) => (
                                 <option key={round} value={round}>
-                                  {round}회
+                                  {statsSeason === "DP" ? getPremiumRoundLabel(round) : `${round}회`}
                                 </option>
                               ))}
                             </select>
@@ -1931,45 +2648,53 @@ export default function PortalClient({
 
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                                 <div className="border-b border-white/10 px-4 py-3 text-sm text-white/55">
-                                  약점 문항 (정답률 낮은 순)
+                                  {adminStats.season === "DP"
+                                    ? "문항별 통계"
+                                    : "약점 문항 (정답률 낮은 순)"}
                                 </div>
-                                <div className="overflow-x-auto">
-                                  <table className="w-full min-w-[420px] text-sm">
-                                    <thead className="text-white/55">
-                                      <tr>
-                                        <th className="px-3 py-3 text-left">문항</th>
-                                        <th className="px-3 py-3 text-left">정답</th>
-                                        <th className="px-3 py-3 text-left">정답률</th>
-                                        <th className="px-3 py-3 text-left">1번</th>
-                                        <th className="px-3 py-3 text-left">2번</th>
-                                        <th className="px-3 py-3 text-left">3번</th>
-                                        <th className="px-3 py-3 text-left">4번</th>
-                                        <th className="px-3 py-3 text-left">5번</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {adminStats.weakQuestions.slice(0, 8).map((row) => (
-                                        <tr key={row.question} className="border-t border-white/10">
-                                          <td className="px-3 py-3">{row.question}번</td>
-                                          <td className="px-3 py-3">{row.correctChoice ?? "-"}</td>
-                                          <td className="px-3 py-3">{row.correctRate}%</td>
-                                          {row.choiceRates.map((choice) => (
-                                            <td
-                                              key={`${row.question}-${choice.choice}`}
-                                              className={`px-3 py-3 ${
-                                                choice.choice === row.correctChoice
-                                                  ? "font-semibold text-emerald-300"
-                                                  : ""
-                                              }`}
-                                            >
-                                              {choice.rate}%
-                                            </td>
-                                          ))}
+                                {adminStats.season === "DP" ? (
+                                  <div className="px-4 py-8 text-center text-sm text-white/60">
+                                    더프리미엄 모의고사는 문항별 통계를 제공하지 않습니다.
+                                  </div>
+                                ) : (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[420px] text-sm">
+                                      <thead className="text-white/55">
+                                        <tr>
+                                          <th className="px-3 py-3 text-left">문항</th>
+                                          <th className="px-3 py-3 text-left">정답</th>
+                                          <th className="px-3 py-3 text-left">정답률</th>
+                                          <th className="px-3 py-3 text-left">1번</th>
+                                          <th className="px-3 py-3 text-left">2번</th>
+                                          <th className="px-3 py-3 text-left">3번</th>
+                                          <th className="px-3 py-3 text-left">4번</th>
+                                          <th className="px-3 py-3 text-left">5번</th>
                                         </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
+                                      </thead>
+                                      <tbody>
+                                        {adminStats.weakQuestions.slice(0, 8).map((row) => (
+                                          <tr key={row.question} className="border-t border-white/10">
+                                            <td className="px-3 py-3">{row.question}번</td>
+                                            <td className="px-3 py-3">{row.correctChoice ?? "-"}</td>
+                                            <td className="px-3 py-3">{row.correctRate}%</td>
+                                            {row.choiceRates.map((choice) => (
+                                              <td
+                                                key={`${row.question}-${choice.choice}`}
+                                                className={`px-3 py-3 ${
+                                                  choice.choice === row.correctChoice
+                                                    ? "font-semibold text-emerald-300"
+                                                    : ""
+                                                }`}
+                                              >
+                                                {choice.rate}%
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -2328,7 +3053,7 @@ export default function PortalClient({
                       <p className="text-base text-white/55 sm:text-lg">
                         {isAdminMode
                           ? "관리자 로그인 상태로 학생 화면과 동일하게 확인할 수 있습니다."
-                          : "C 시즌 / N 시즌 / M 시즌 중 원하는 시즌을 눌러 성적 화면으로 이동할 수 있습니다."}
+                          : "C 시즌 / N 시즌 / M 시즌 / 더프리미엄 모의고사 중 원하는 항목을 눌러 성적 화면으로 이동할 수 있습니다."}
                       </p>
                     </div>
 
@@ -2356,7 +3081,7 @@ export default function PortalClient({
                       </a>
                     </div>
 
-                    <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
+                    <div className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-4">
                       {seasons.map((season, index) => (
                         <motion.button
                           type="button"
@@ -2373,7 +3098,7 @@ export default function PortalClient({
                           <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
                             <CardHeader>
                               <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-sky-400/10 text-xl font-semibold text-sky-300 ring-1 ring-sky-300/20">
-                                {season.id}
+                                {season.badge}
                               </div>
                               <CardTitle className="flex items-center justify-between text-2xl">
                                 {season.title}
@@ -2691,6 +3416,9 @@ export default function PortalClient({
                           </CardContent>
                         </Card>
                       )}
+
+                      {selectedRoundDetail &&
+                        renderSeasonNoteCard(`C시즌 ${selectedRoundDetail.round}회 시험 셀프 피드백`)}
 
                       <div className="flex flex-wrap gap-3">
                         <Button
@@ -3039,6 +3767,235 @@ export default function PortalClient({
                           </CardContent>
                         </Card>
                       )}
+
+                      {selectedNRoundDetail &&
+                        renderSeasonNoteCard(`N시즌 ${selectedNRoundDetail.round}회 시험 셀프 피드백`)}
+
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          className="rounded-2xl bg-white text-black hover:bg-white/90"
+                          onClick={() => setSelectedSeason(null)}
+                        >
+                          시즌 다시 선택
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          onClick={handleLogout}
+                        >
+                          처음 화면으로
+                        </Button>
+                      </div>
+                    </div>
+                  ) : selectedSeason === "DP" ? (
+                    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+                      <div className="self-start">
+                        <Button
+                          variant="secondary"
+                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          onClick={() => setSelectedSeason(null)}
+                        >
+                          시즌 선택으로 돌아가기
+                        </Button>
+                      </div>
+                      <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                        <CardHeader>
+                          <CardTitle className="text-3xl">더프리미엄 모의고사</CardTitle>
+                          <CardDescription className="text-white/55">
+                            3월, 4월, 5월, 7월, 8월, 9월, 10월, 11월 더프 물리학 II 통계를 확인할 수 있습니다.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {premiumLoading ? (
+                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
+                              더프리미엄 모의고사 데이터를 불러오는 중...
+                            </div>
+                          ) : premiumError ? (
+                            <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-6 text-red-200">
+                              {premiumError}
+                            </div>
+                          ) : premiumData ? (
+                            <div className="space-y-6">
+                              <div className="relative overflow-x-auto">
+                                <div className="relative h-[390px] min-w-[760px] rounded-[1.5rem] border border-white/10 bg-black/20 px-6 py-6">
+                                  <div className="pointer-events-none absolute inset-x-6 top-6 bottom-14">
+                                    <div className="absolute inset-x-0 top-0 border-t border-white/10" />
+                                    <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
+                                    <div className="absolute inset-x-0 bottom-0 border-t border-white/20" />
+                                    <div className="absolute inset-y-0 left-0 border-l border-white/20" />
+                                  </div>
+
+                                  <div className="absolute left-0 top-5 w-10 text-right text-xs text-white/50 sm:w-12">
+                                    50
+                                  </div>
+                                  <div className="absolute left-0 top-[48%] w-10 -translate-y-1/2 text-right text-xs text-white/50 sm:w-12">
+                                    25
+                                  </div>
+                                  <div className="absolute left-0 bottom-11 w-10 text-right text-xs text-white/50 sm:w-12">
+                                    0
+                                  </div>
+
+                                  {premiumPlotPoints.length > 0 && (
+                                    <svg
+                                      viewBox="0 0 100 100"
+                                      className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
+                                      preserveAspectRatio="none"
+                                    >
+                                      {premiumSmoothLinePath && (
+                                        <path
+                                          d={premiumSmoothLinePath}
+                                          fill="none"
+                                          stroke="#ec6a78"
+                                          strokeWidth="1.6"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeOpacity="0.92"
+                                        />
+                                      )}
+                                      {premiumPlotPoints.map((point, index) => (
+                                        <circle
+                                          key={`premium-point-${index}`}
+                                          cx={point.x}
+                                          cy={point.y}
+                                          fill="#ec6a78"
+                                          fillOpacity="0.96"
+                                          r="1.1"
+                                        />
+                                      ))}
+                                    </svg>
+                                  )}
+
+                                  <div className="absolute left-12 right-6 top-6 bottom-14 grid grid-cols-8 gap-2">
+                                    {premiumData.rounds.map((round) => {
+                                      const averageHeight = `${round.averageScore * 2}%`;
+                                      const isSelected = selectedPremiumRound === round.round;
+                                      return (
+                                        <button
+                                          key={round.round}
+                                          type="button"
+                                          onClick={() => setSelectedPremiumRound(round.round)}
+                                          className={`relative flex h-full items-end justify-center transition ${
+                                            isSelected ? "scale-[1.02]" : "opacity-90 hover:opacity-100"
+                                          }`}
+                                        >
+                                          <div
+                                            className={`w-8 rounded-t-xl bg-white/30 transition sm:w-10 ${
+                                              isSelected ? "ring-2 ring-sky-300/60" : ""
+                                            }`}
+                                            style={{ height: averageHeight }}
+                                          />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+
+                                  <div className="absolute left-12 right-6 bottom-4 grid grid-cols-8 gap-2">
+                                    {premiumData.rounds.map((round) => (
+                                      <button
+                                        key={`premium-label-${round.round}`}
+                                        type="button"
+                                        onClick={() => setSelectedPremiumRound(round.round)}
+                                        className={`rounded-md py-1 text-center transition ${
+                                          selectedPremiumRound === round.round
+                                            ? "bg-white/10"
+                                            : "hover:bg-white/5"
+                                        }`}
+                                      >
+                                        <p className="text-sm font-medium text-white/90">
+                                          {round.label}
+                                        </p>
+                                        <p className="text-[11px] text-white/45">
+                                          평균 {round.averageScore}
+                                        </p>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {!premiumData.rounds.some((round) => round.myScore !== null) && (
+                                <p className="text-sm text-amber-200/90">
+                                  등록된 더프리미엄 모의고사 점수가 없어 빨간 점은 표시되지 않습니다.
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
+                              더프리미엄 모의고사 데이터가 없습니다.
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {selectedPremiumRoundDetail && (
+                        <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                          <CardHeader>
+                            <CardTitle className="text-2xl">
+                              더프리미엄 모의고사 {selectedPremiumRoundDetail.label} 상세 통계
+                            </CardTitle>
+                            <CardDescription className="text-white/55">
+                              원점수와 반별 통계만 확인할 수 있습니다.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-6">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">내 원점수</p>
+                                <p className="mt-2 text-3xl font-semibold text-red-300">
+                                  {selectedPremiumRoundDetail.myScore ?? "-"}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm text-white/45">평균 점수</p>
+                                <p className="mt-2 text-3xl font-semibold">
+                                  {selectedPremiumRoundDetail.averageScore}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                              <div className="border-b border-white/10 px-4 py-3">
+                                <p className="text-sm text-white/55">반별 통계</p>
+                              </div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full min-w-[440px] text-sm">
+                                  <thead className="text-white/55">
+                                    <tr>
+                                      <th className="px-4 py-3 text-left">반</th>
+                                      <th className="px-4 py-3 text-left">인원</th>
+                                      <th className="px-4 py-3 text-left">평균</th>
+                                      <th className="px-4 py-3 text-left">중앙값</th>
+                                      <th className="px-4 py-3 text-left">표준편차</th>
+                                      <th className="px-4 py-3 text-left">최고</th>
+                                      <th className="px-4 py-3 text-left">최저</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sortClassStats(selectedPremiumRoundDetail.classStats).map((row) => (
+                                      <tr key={row.className} className="border-t border-white/10">
+                                        <td className="px-4 py-3">{row.className}</td>
+                                        <td className="px-4 py-3">{row.count}</td>
+                                        <td className="px-4 py-3">{row.average}</td>
+                                        <td className="px-4 py-3">{row.median}</td>
+                                        <td className="px-4 py-3">{row.stdDev}</td>
+                                        <td className="px-4 py-3">{row.max}</td>
+                                        <td className="px-4 py-3">{row.min}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+
+                            <div className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                              통계/점수 문의는 카카오톡 아이디 `jwlee2670` 또는 `010-3676-2670`으로 연락 주시면 빠르게 확인 후 안내드리겠습니다.
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {selectedPremiumRoundDetail &&
+                        renderSeasonNoteCard(`더프리미엄 모의고사 ${selectedPremiumRoundDetail.label} 셀프 피드백`)}
 
                       <div className="flex flex-wrap gap-3">
                         <Button

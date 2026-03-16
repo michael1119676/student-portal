@@ -4,6 +4,7 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonCAdminStats } from "@/lib/season-c";
 import { buildSeasonNAdminStats } from "@/lib/season-n";
+import { buildPremiumAdminStats, PREMIUM_MONTH_ROUNDS } from "@/lib/season-premium";
 
 export async function GET(request: Request) {
   const cookieStore = await cookies();
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!["C", "N", "M"].includes(season)) {
+  if (!["C", "N", "M", "DP"].includes(season)) {
     return NextResponse.json(
       { ok: false, message: `지원하지 않는 시즌입니다: ${season}` },
       { status: 400 }
@@ -52,9 +53,32 @@ export async function GET(request: Request) {
     );
   }
 
-  const stats = season === "N"
-    ? buildSeasonNAdminStats(students, round)
-    : buildSeasonCAdminStats(students, round);
+  if (season === "DP") {
+    const { data: records, error: recordError } = await supabase
+      .from("exam_score_records")
+      .select("student_id, round, score")
+      .eq("season", "DP")
+      .in("round", [...PREMIUM_MONTH_ROUNDS]);
+
+    if (recordError) {
+      return NextResponse.json(
+        { ok: false, message: "더프리미엄 모의고사 점수를 불러오지 못했습니다." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      stats: buildPremiumAdminStats(
+        students,
+        (records ?? []) as Array<{ student_id: string; round: number; score: number | null }>,
+        round
+      ),
+    });
+  }
+
+  const stats =
+    season === "N" ? buildSeasonNAdminStats(students, round) : buildSeasonCAdminStats(students, round);
   return NextResponse.json({
     ok: true,
     stats,
