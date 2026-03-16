@@ -14,6 +14,7 @@ import {
   Search,
   Settings,
   Shield,
+  UserPlus,
   UserRound,
   X,
 } from "lucide-react";
@@ -214,7 +215,7 @@ type AdminStatsResponse = {
 type PortalHistoryState = {
   __portalNav: true;
   selectedSeason: string | null;
-  adminStep: "home" | "search" | "scores" | "stats";
+  adminStep: "home" | "search" | "scores" | "stats" | "create";
   selectedStudentId: string | null;
 };
 
@@ -364,7 +365,10 @@ export default function PortalClient({
   const [newPin, setNewPin] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
 
-  const [adminStep, setAdminStep] = useState<"home" | "search" | "scores" | "stats">("home");
+  const [adminStep, setAdminStep] = useState<"home" | "search" | "scores" | "stats" | "create">(
+    "home"
+  );
+  const [adminStudents, setAdminStudents] = useState<ManagedStudent[]>(managedStudents);
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<ManagedStudent | null>(null);
   const [isLoadingStudent, setIsLoadingStudent] = useState(false);
@@ -388,6 +392,12 @@ export default function PortalClient({
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
   const [adminStatsLoading, setAdminStatsLoading] = useState(false);
   const [adminStatsError, setAdminStatsError] = useState("");
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentPhone, setNewStudentPhone] = useState("");
+  const [newStudentPin, setNewStudentPin] = useState("1111");
+  const [newStudentClassName, setNewStudentClassName] = useState("");
+  const [newStudentLoading, setNewStudentLoading] = useState(false);
+  const [newStudentMessage, setNewStudentMessage] = useState("");
   const historyReadyRef = useRef(false);
   const isApplyingPopStateRef = useRef(false);
   const lastHistoryKeyRef = useRef("");
@@ -409,12 +419,18 @@ export default function PortalClient({
 
   const filteredStudents = useMemo(() => {
     const keyword = studentSearch.trim().toLowerCase();
-    if (!keyword) return managedStudents;
+    if (!keyword) return adminStudents;
 
-    return managedStudents.filter((student) =>
-      student.name.toLowerCase().includes(keyword)
+    return adminStudents.filter(
+      (student) =>
+        student.name.toLowerCase().includes(keyword) ||
+        student.phone.toLowerCase().includes(keyword)
     );
-  }, [managedStudents, studentSearch]);
+  }, [adminStudents, studentSearch]);
+
+  useEffect(() => {
+    setAdminStudents(managedStudents);
+  }, [managedStudents]);
 
   const selectedRoundDetail = useMemo(() => {
     if (!seasonCData || selectedRound === null) return null;
@@ -491,7 +507,7 @@ export default function PortalClient({
           setSelectedStudent(null);
         } else {
           const nextStudent =
-            managedStudents.find((student) => student.id === state.selectedStudentId) ?? null;
+            adminStudents.find((student) => student.id === state.selectedStudentId) ?? null;
           setSelectedStudent(nextStudent);
           if (nextStudent) {
             const cached = studentProfileCacheRef.current[nextStudent.id];
@@ -527,7 +543,7 @@ export default function PortalClient({
     return () => {
       window.removeEventListener("popstate", onPopState);
     };
-  }, [isAdminMode, managedStudents]);
+  }, [adminStudents, isAdminMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1147,6 +1163,70 @@ export default function PortalClient({
     setIsLoadingStudent(false);
   }
 
+  async function handleCreateStudent() {
+    const name = newStudentName.trim();
+    const normalizedPhone = normalizePhone(newStudentPhone);
+    const pinValue = newStudentPin.trim();
+    const className = newStudentClassName.trim();
+
+    setNewStudentMessage("");
+
+    if (!name) {
+      setNewStudentMessage("학생 이름을 입력해주세요.");
+      return;
+    }
+    if (normalizedPhone.length < 10 || normalizedPhone.length > 11) {
+      setNewStudentMessage("전화번호를 정확히 입력해주세요.");
+      return;
+    }
+    if (!/^\d{4}$/.test(pinValue)) {
+      setNewStudentMessage("비밀번호는 숫자 4자리여야 합니다.");
+      return;
+    }
+
+    setNewStudentLoading(true);
+    try {
+      const res = await fetch("/api/admin/students", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          phone: normalizedPhone,
+          pin: pinValue,
+          className,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.student) {
+        setNewStudentMessage(data.message || "학생 추가에 실패했습니다.");
+        return;
+      }
+
+      const created = data.student as ManagedStudent;
+      setAdminStudents((prev) =>
+        [...prev, created]
+          .filter(
+            (student, index, arr) =>
+              arr.findIndex((target) => target.id === student.id) === index
+          )
+          .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"))
+      );
+      setNewStudentMessage("학생 추가 완료");
+      setStudentSearch(created.name);
+      setNewStudentName("");
+      setNewStudentPhone("");
+      setNewStudentPin("1111");
+      setNewStudentClassName("");
+    } catch {
+      setNewStudentMessage("학생 추가 중 오류가 발생했습니다.");
+    } finally {
+      setNewStudentLoading(false);
+    }
+  }
+
   function closeProfileModal() {
     setIsEditingProfile(false);
     setSaveMessage("");
@@ -1390,7 +1470,7 @@ export default function PortalClient({
                       </p>
                     </div>
 
-                    <div className="mx-auto grid w-full max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="mx-auto grid w-full max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-5">
                       <button
                         type="button"
                         onClick={() => setAdminStep("search")}
@@ -1433,6 +1513,30 @@ export default function PortalClient({
                             </CardTitle>
                             <CardDescription className="text-base text-white/50">
                               시즌 선택 후 회차별 1컷, 2컷, 3컷을 입력합니다.
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminStep("create");
+                          setNewStudentMessage("");
+                        }}
+                        className="group text-left"
+                      >
+                        <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
+                          <CardHeader>
+                            <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-fuchsia-400/10 text-fuchsia-200 ring-1 ring-fuchsia-300/20">
+                              <UserPlus className="h-6 w-6" />
+                            </div>
+                            <CardTitle className="flex items-center justify-between text-2xl">
+                              학생 추가
+                              <ArrowRight className="h-5 w-5 text-white/45 transition-transform duration-200 group-hover:translate-x-1" />
+                            </CardTitle>
+                            <CardDescription className="text-base text-white/50">
+                              이름/전화번호/비밀번호/반을 입력해 학생 계정을 생성합니다.
                             </CardDescription>
                           </CardHeader>
                         </Card>
@@ -1624,6 +1728,89 @@ export default function PortalClient({
                         )}
                         {nCutSaveMessage && (
                           <p className="text-sm text-white/65">{nCutSaveMessage}</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : adminStep === "create" ? (
+                  <div className="mx-auto w-full max-w-3xl">
+                    <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                      <CardHeader>
+                        <CardTitle className="text-3xl">학생 추가</CardTitle>
+                        <CardDescription className="text-white/55">
+                          이름/전화번호/비밀번호/반을 입력하면 즉시 계정이 생성됩니다.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label className="text-white/75">이름</Label>
+                            <Input
+                              value={newStudentName}
+                              onChange={(e) => setNewStudentName(e.target.value)}
+                              placeholder="학생 이름"
+                              className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-white/75">전화번호</Label>
+                            <Input
+                              value={newStudentPhone}
+                              onChange={(e) =>
+                                setNewStudentPhone(e.target.value.replace(/[^\d]/g, "").slice(0, 11))
+                              }
+                              placeholder="01012345678"
+                              className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-white/75">비밀번호 (숫자 4자리)</Label>
+                            <Input
+                              value={newStudentPin}
+                              onChange={(e) =>
+                                setNewStudentPin(e.target.value.replace(/[^\d]/g, "").slice(0, 4))
+                              }
+                              placeholder="1111"
+                              className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-white/75">반</Label>
+                            <Input
+                              value={newStudentClassName}
+                              onChange={(e) => setNewStudentClassName(e.target.value)}
+                              placeholder="토요반 / 금요반 / 영상반"
+                              className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            className="rounded-2xl bg-white text-black hover:bg-white/90"
+                            onClick={handleCreateStudent}
+                            disabled={newStudentLoading}
+                          >
+                            {newStudentLoading ? "생성 중..." : "학생 생성"}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                            onClick={() => setAdminStep("search")}
+                          >
+                            학생 검색으로 이동
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                            onClick={() => setAdminStep("home")}
+                          >
+                            관리자 홈
+                          </Button>
+                        </div>
+
+                        {newStudentMessage && (
+                          <p className="text-sm text-white/65">{newStudentMessage}</p>
                         )}
                       </CardContent>
                     </Card>
