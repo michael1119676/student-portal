@@ -11,6 +11,17 @@ type ProbabilityRow = {
   created_at: string;
 };
 
+function sortProbabilityRows(a: ProbabilityRow, b: ProbabilityRow) {
+  const aProb = a.base_probability_percent === null ? -1 : Number(a.base_probability_percent);
+  const bProb = b.base_probability_percent === null ? -1 : Number(b.base_probability_percent);
+  if (aProb !== bProb) return bProb - aProb;
+
+  const createdDiff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  if (!Number.isNaN(createdDiff) && createdDiff !== 0) return createdDiff;
+
+  return a.name.localeCompare(b.name, "ko-KR");
+}
+
 export async function GET() {
   const user = await getSessionUserFromCookies();
   if (!user) return unauthorizedResponse();
@@ -71,7 +82,9 @@ export async function GET() {
 
   const productRows = (products ?? []) as ProbabilityRow[];
   const payload = (boxes ?? []).map((box) => {
-    const rows = productRows.filter((row) => row.box_id === box.id);
+    const rows = productRows
+      .filter((row) => row.box_id === box.id)
+      .sort(sortProbabilityRows);
     const totalRemaining = rows.reduce(
       (acc, row) => acc + Math.max(0, Number(remainingMap.get(row.id) ?? 0)),
       0
