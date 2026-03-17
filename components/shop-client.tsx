@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft, Gift, RefreshCw, Shield, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -153,6 +154,10 @@ const BOX_VIDEO_ASSETS: Record<
     opening: string;
   }
 > = {
+  roulette: {
+    waiting: "/shop-videos/roulette-wait.png",
+    opening: "/shop-videos/roulette-open.mp4",
+  },
   bronze: {
     waiting: "/shop-videos/bronze-wait.mp4",
     opening: "/shop-videos/bronze-open.mp4",
@@ -1094,7 +1099,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               const soldOut = box.remainingCount === 0;
               const hasTicket = Number(box.ticketCount ?? 0) > 0;
               const canOpen = (hasTicket || coinBalance >= box.coinCost) && !soldOut && !isOpening;
-              const waitingVideoSrc = BOX_VIDEO_ASSETS[box.code]?.waiting ?? null;
+              const waitingMediaSrc = BOX_VIDEO_ASSETS[box.code]?.waiting ?? null;
+              const waitingIsVideo = !!waitingMediaSrc && /\.(mp4|webm|ogg)$/i.test(waitingMediaSrc);
               return (
                 <Card
                   key={box.code}
@@ -1117,17 +1123,27 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-                      {waitingVideoSrc ? (
-                        <video
-                          key={`${box.code}-waiting`}
-                          src={waitingVideoSrc}
-                          autoPlay
-                          loop
-                          muted
-                          playsInline
-                          preload="metadata"
-                          className="h-24 w-full object-cover opacity-85"
-                        />
+                      {waitingMediaSrc ? (
+                        waitingIsVideo ? (
+                          <video
+                            key={`${box.code}-waiting`}
+                            src={waitingMediaSrc}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="h-24 w-full object-cover opacity-85"
+                          />
+                        ) : (
+                          <Image
+                            src={waitingMediaSrc}
+                            alt={`${box.name} 대기 이미지`}
+                            fill
+                            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
+                            className="object-cover opacity-90"
+                          />
+                        )
                       ) : (
                         <div className="flex h-24 items-center justify-center">
                           <Gift
