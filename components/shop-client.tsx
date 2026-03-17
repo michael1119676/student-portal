@@ -192,6 +192,10 @@ const BOX_CODE_TO_KO_NAME: Record<string, string> = {
   diamond: "다이아",
 };
 
+function getDisplayBoxName(box: { code: string; name: string }) {
+  return box.code === "roulette" ? "룰렛" : box.name;
+}
+
 function parseTicketRewardDrawQueue(productName: string) {
   const match = String(productName || "").match(
     /(브론즈|실버|골드|다이아)\s*상자\s*([0-9]+)\s*회/i
@@ -307,7 +311,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const boxNameMap = useMemo(() => {
     const map: Record<string, string> = {};
     for (const box of boxes) {
-      map[box.code] = box.name;
+      map[box.code] = getDisplayBoxName(box);
     }
     return map;
   }, [boxes]);
@@ -875,7 +879,9 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               <div className="w-full overflow-hidden rounded-[2rem] border border-white/20 bg-black/70 shadow-[0_30px_100px_rgba(0,0,0,0.6)]">
                 <div className="border-b border-white/10 px-6 py-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-amber-200/80">{cinematicBoxName}</p>
-                  <p className="mt-1 text-base font-medium text-white">상자 개봉 중...</p>
+                  <p className="mt-1 text-base font-medium text-white">
+                    {drawCinematic.boxCode === "roulette" ? "룰렛 돌리는 중..." : "상자 개봉 중..."}
+                  </p>
                 </div>
                 {cinematicVideoSrc ? (
                   <video
@@ -892,7 +898,9 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   <div className="flex h-[56vh] flex-col items-center justify-center gap-4 bg-black/70 text-white/70">
                     <RefreshCw className="h-10 w-10 animate-spin text-amber-200/80" />
                     <div className="text-center">
-                      <p className="text-base font-medium text-white">상자를 개봉하고 있습니다...</p>
+                      <p className="text-base font-medium text-white">
+                        {drawCinematic.boxCode === "roulette" ? "룰렛을 돌리고 있습니다..." : "상자를 개봉하고 있습니다..."}
+                      </p>
                       <p className="mt-1 text-sm text-white/55">
                         영상 없이 바로 결과를 계산하는 상자입니다.
                       </p>
@@ -967,7 +975,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                 <div className="space-y-4">
                   {probabilityBoxes.map((box) => (
                     <div key={box.code} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <p className="mb-3 text-sm font-medium text-white">{box.name}</p>
+                      <p className="mb-3 text-sm font-medium text-white">{getDisplayBoxName(box)}</p>
                       <div className="overflow-x-auto rounded-xl border border-white/10">
                         <table className="w-full min-w-[700px] text-sm">
                           <thead className="bg-black/40 text-white/65">
@@ -1096,11 +1104,13 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {boxes.map((box) => {
               const isOpening = openingBox === box.code;
+              const isRoulette = box.code === "roulette";
               const soldOut = box.remainingCount === 0;
               const hasTicket = Number(box.ticketCount ?? 0) > 0;
               const canOpen = (hasTicket || coinBalance >= box.coinCost) && !soldOut && !isOpening;
               const waitingMediaSrc = BOX_VIDEO_ASSETS[box.code]?.waiting ?? null;
               const waitingIsVideo = !!waitingMediaSrc && /\.(mp4|webm|ogg)$/i.test(waitingMediaSrc);
+              const displayBoxName = getDisplayBoxName(box);
               return (
                 <Card
                   key={box.code}
@@ -1112,13 +1122,13 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     <div
                       className={`mb-2 inline-flex w-fit rounded-full bg-gradient-to-r px-3 py-1 text-xs text-white/85 ${boxBadgeClass(box.code)}`}
                     >
-                      {box.name}
+                      {displayBoxName}
                     </div>
                     <CardTitle className="text-2xl">{box.coinCost} 코인</CardTitle>
                     <CardDescription className="text-white/55">
                       {isAdmin
                         ? `남은 재고 ${box.remainingCount ?? "-"}개 · 상품 ${box.productCount ?? "-"}종`
-                        : `코인으로 상자를 열고 랜덤 상품을 획득할 수 있습니다.${hasTicket ? ` 무료권 ${box.ticketCount}장 보유` : ""}`}
+                        : `${isRoulette ? "코인으로 룰렛을 돌려 랜덤 상품을 획득할 수 있습니다" : "코인으로 상자를 열고 랜덤 상품을 획득할 수 있습니다."}${hasTicket ? ` 무료권 ${box.ticketCount}장 보유` : ""}`}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -1138,7 +1148,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         ) : (
                           <Image
                             src={waitingMediaSrc}
-                            alt={`${box.name} 대기 이미지`}
+                            alt={`${displayBoxName} 대기 이미지`}
                             fill
                             sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
                             className="object-cover opacity-90"
@@ -1165,10 +1175,16 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         : !hasTicket && coinBalance < box.coinCost
                           ? "코인 부족"
                         : isOpening
-                          ? "오픈 중..."
+                          ? isRoulette
+                            ? "돌리는 중..."
+                            : "오픈 중..."
                           : hasTicket
-                            ? `무료권 사용 열기 (${box.ticketCount})`
-                            : "상자 열기"}
+                            ? isRoulette
+                              ? `무료권 사용 돌리기 (${box.ticketCount})`
+                              : `무료권 사용 열기 (${box.ticketCount})`
+                            : isRoulette
+                              ? "룰렛 돌리기"
+                              : "상자 열기"}
                     </Button>
                   </CardContent>
                 </Card>
@@ -1301,7 +1317,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                       >
                         {inventoryBoxes.map((box) => (
                           <option key={box.code} value={box.code}>
-                            {box.name}
+                            {getDisplayBoxName(box)}
                           </option>
                         ))}
                       </select>

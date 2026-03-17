@@ -19,7 +19,7 @@ export type ShopProductSeed = {
 };
 
 export const SHOP_BOX_DEFAULTS: Record<ShopBoxCode, ShopBoxSeed> = {
-  roulette: { code: "roulette", name: "1코인 룰렛", coinCost: 1, sortOrder: 0 },
+  roulette: { code: "roulette", name: "룰렛", coinCost: 1, sortOrder: 0 },
   bronze: { code: "bronze", name: "브론즈 상자", coinCost: 2, sortOrder: 1 },
   silver: { code: "silver", name: "실버 상자", coinCost: 3, sortOrder: 2 },
   gold: { code: "gold", name: "골드 상자", coinCost: 7, sortOrder: 3 },
