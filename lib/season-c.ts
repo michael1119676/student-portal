@@ -25,7 +25,7 @@ type RawSeasonCData = {
 };
 
 type RoundRow = {
-  studentId: string;
+  studentId: string | null;
   name: string;
   className: string;
   score: number | null;
@@ -119,6 +119,15 @@ const ANSWER_KEYS: Record<number, number[]> = {
 const ROUND_COUNT = 10;
 const MAX_SCORE = 100;
 const BIN_SIZE = 10;
+const STUDENT_NAME_ALIASES: Record<string, string> = {
+  김아안: "김이안",
+  임국혁: "임국현",
+};
+
+function normalizeStudentNameForMatching(value: string) {
+  const normalized = String(value || "").trim();
+  return STUDENT_NAME_ALIASES[normalized] ?? normalized;
+}
 
 function normalizeDisplayClassName(value: string) {
   const normalized = String(value || "").trim();
@@ -209,7 +218,7 @@ function scoreFromAnswers(round: number, answers: Array<number | null>) {
 function buildNameToStudentsMap(students: StudentRef[]) {
   const map = new Map<string, StudentRef[]>();
   for (const student of students) {
-    const key = student.name.trim();
+    const key = normalizeStudentNameForMatching(student.name);
     const list = map.get(key) ?? [];
     list.push(student);
     map.set(key, list);
@@ -256,16 +265,16 @@ function buildRoundRows(
   const result: RoundRow[] = [];
 
   for (const row of deduped) {
-    const candidates = byName.get(row.name.trim()) ?? [];
+    const normalizedName = normalizeStudentNameForMatching(row.name);
+    const candidates = byName.get(normalizedName) ?? [];
     const matched = chooseStudentByClass(candidates, row.className);
-    if (!matched) continue;
 
     const answers = row.answers.map((value) => normalizeChoice(value));
     const scoreFromSheet = normalizeScore(row.score);
     result.push({
-      studentId: matched.id,
-      name: matched.name,
-      className: normalizeDisplayClassName(row.className || matched.class_name || "미분류"),
+      studentId: matched?.id ?? null,
+      name: matched?.name ?? normalizedName,
+      className: normalizeDisplayClassName(row.className || matched?.class_name || "미분류"),
       score: scoreFromSheet ?? scoreFromAnswers(round, answers),
       answers,
     });
