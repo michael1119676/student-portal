@@ -1,19 +1,13 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonCAdminStats } from "@/lib/season-c";
 import { buildSeasonNAdminStats } from "@/lib/season-n";
 import { buildPremiumAdminStats, PREMIUM_MONTH_ROUNDS } from "@/lib/season-premium";
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  const user = verifySessionToken(token);
-
-  if (!user || user.role !== "admin") {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
-  }
+  const user = await getSessionUserFromCookies();
+  if (!user || user.role !== "admin") return unauthorizedResponse();
 
   const url = new URL(request.url);
   const season = String(url.searchParams.get("season") || "C").toUpperCase();

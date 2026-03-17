@@ -3,11 +3,26 @@ import { NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, SessionUser, verifySessionToken } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function getSessionUserFromCookies() {
+export type StudentProfileRow = {
+  korean_subject: string | null;
+  math_subject: string | null;
+  science_1: string | null;
+  science_2: string | null;
+  target_university: string | null;
+};
+
+async function getSignedSessionUserFromCookies() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  const user = verifySessionToken(token);
-  return user;
+  return verifySessionToken(token);
+}
+
+export async function getSessionUserFromCookies() {
+  const signedUser = await getSignedSessionUserFromCookies();
+  if (!signedUser) return null;
+
+  const supabase = createAdminClient();
+  return resolveSessionUser(supabase, signedUser);
 }
 
 export function unauthorizedResponse() {
@@ -33,36 +48,66 @@ type StudentRow = {
 export async function resolveSessionUser(
   supabase: SupabaseClientLike,
   user: SessionUser
-): Promise<SessionUser> {
+): Promise<SessionUser | null> {
   const { data: byId } = await supabase
     .from("students")
     .select("id, name, phone, role")
     .eq("id", user.id)
     .maybeSingle<StudentRow>();
 
-  if (byId) {
+  if (!byId) return null;
+
+  return {
+    id: byId.id,
+    name: byId.name || user.name,
+    phone: byId.phone || user.phone,
+    role: byId.role === "admin" ? "admin" : "student",
+  };
+}
+
+export async function getStudentProfileById(
+  supabase: SupabaseClientLike,
+  studentId: string
+): Promise<StudentProfileRow | null> {
+  const { data, error } = await supabase
+    .from("students")
+    .select(
+      `
+        korean_subject,
+        math_subject,
+        science_1,
+        science_2,
+        target_university
+      `
+    )
+    .eq("id", studentId)
+    .maybeSingle<StudentProfileRow>();
+
+  if (error || !data) return null;
+  return data;
+}
+
+export async function getSessionContextFromCookies() {
+  const signedUser = await getSignedSessionUserFromCookies();
+  if (!signedUser) {
     return {
-      id: byId.id,
-      name: byId.name || user.name,
-      phone: byId.phone || user.phone,
-      role: byId.role === "admin" ? "admin" : "student",
+      user: null,
+      profile: null,
     };
   }
 
-  const { data: byPhone } = await supabase
-    .from("students")
-    .select("id, name, phone, role")
-    .eq("phone", user.phone)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<StudentRow>();
+  const supabase = createAdminClient();
+  const user = await resolveSessionUser(supabase, signedUser);
+  if (!user) {
+    return {
+      user: null,
+      profile: null,
+    };
+  }
 
-  if (!byPhone) return user;
-
+  const profile = await getStudentProfileById(supabase, user.id);
   return {
-    id: byPhone.id,
-    name: byPhone.name || user.name,
-    phone: byPhone.phone || user.phone,
-    role: byPhone.role === "admin" ? "admin" : "student",
+    user,
+    profile,
   };
 }

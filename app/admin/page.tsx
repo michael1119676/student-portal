@@ -1,16 +1,13 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import PortalClient, {
   ManagedStudent,
   SessionUser,
 } from "@/components/portal-client";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { getSessionUserFromCookies } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function AdminPage() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  const user = verifySessionToken(token);
+  const user = await getSessionUserFromCookies();
 
   if (!user || user.role !== "admin") {
     redirect("/");

@@ -1,17 +1,11 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonNViewData } from "@/lib/season-n";
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  const user = verifySessionToken(token);
-
-  if (!user) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
-  }
+  const user = await getSessionUserFromCookies();
+  if (!user) return unauthorizedResponse();
 
   const url = new URL(request.url);
   const studentIdFromQuery = String(url.searchParams.get("studentId") || "").trim();

@@ -1,7 +1,6 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getSessionUserFromCookies } from "@/lib/api-auth";
 import { rejectIfCrossOrigin } from "@/lib/security";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 function normalizeSeason(value: unknown) {
@@ -27,9 +26,7 @@ function normalizeCut(value: unknown) {
 }
 
 async function requireAdmin() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  const user = verifySessionToken(token);
+  const user = await getSessionUserFromCookies();
   if (!user || user.role !== "admin") return null;
   return user;
 }

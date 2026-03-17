@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   getSessionUserFromCookies,
-  resolveSessionUser,
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { rejectIfCrossOrigin } from "@/lib/security";
@@ -48,12 +47,11 @@ export async function POST(request: Request) {
   }
 
   const supabase = createAdminClient();
-  const resolvedUser = await resolveSessionUser(supabase, user);
   const { data, error } = await supabase.rpc("shop_draw_box", {
-    p_student_id: resolvedUser.id,
+    p_student_id: user.id,
     p_box_code: boxCode,
-    p_actor_role: resolvedUser.role,
-    p_actor_id: resolvedUser.id,
+    p_actor_role: user.role,
+    p_actor_id: user.id,
   });
 
   if (error) {

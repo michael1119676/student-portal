@@ -56,6 +56,7 @@ export type ManagedStudent = {
 type PortalClientProps = {
   mode?: "student" | "admin";
   initialSessionUser?: SessionUser | null;
+  initialProfile?: StudentProfile | null;
   managedStudents?: ManagedStudent[];
 };
 
@@ -502,6 +503,7 @@ function getTopWrongQuestions(questionStats: StudentQuestionStatRow[]) {
 export default function PortalClient({
   mode = "student",
   initialSessionUser = null,
+  initialProfile = null,
   managedStudents = [],
 }: PortalClientProps) {
   const isAdminMode = mode === "admin";
@@ -516,12 +518,13 @@ export default function PortalClient({
   const [loginError, setLoginError] = useState("");
   const [loginFailCount, setLoginFailCount] = useState(0);
 
-  const [selectedKorean, setSelectedKorean] = useState("언어와 매체");
-  const [selectedMath, setSelectedMath] = useState("미적분");
-  const [selectedScience1, setSelectedScience1] = useState("물리학 I");
-  const [selectedScience2, setSelectedScience2] = useState("화학 I");
-  const [targetUniversity, setTargetUniversity] =
-    useState<keyof typeof universityProfiles>("seoul");
+  const [selectedKorean, setSelectedKorean] = useState(initialProfile?.korean_subject || "언어와 매체");
+  const [selectedMath, setSelectedMath] = useState(initialProfile?.math_subject || "미적분");
+  const [selectedScience1, setSelectedScience1] = useState(initialProfile?.science_1 || "물리학 I");
+  const [selectedScience2, setSelectedScience2] = useState(initialProfile?.science_2 || "화학 I");
+  const [targetUniversity, setTargetUniversity] = useState<keyof typeof universityProfiles>(
+    getTargetUniversity(initialProfile?.target_university)
+  );
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [newPin, setNewPin] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
@@ -719,6 +722,16 @@ export default function PortalClient({
     setTargetUniversity(getTargetUniversity(profileData?.target_university));
   }
 
+  function handleReturnToPortalHome() {
+    setSelectedSeason(null);
+    setIsEditingProfile(false);
+    setSaveMessage("");
+    setSeasonNoteMessage("");
+    setAdminNotesMessage("");
+    setLoginError("");
+    setNewPin("");
+  }
+
   function pushPortalHistoryEntry() {
     if (typeof window === "undefined") return;
     const state: PortalHistoryState = {
@@ -775,6 +788,11 @@ export default function PortalClient({
       return;
     }
 
+    if (initialSessionUser) {
+      setIsCheckingSession(false);
+      return;
+    }
+
     const loadSession = async () => {
       try {
         const res = await fetch("/api/session", { cache: "no-store" });
@@ -803,7 +821,7 @@ export default function PortalClient({
     };
 
     loadSession();
-  }, [isAdminMode]);
+  }, [initialSessionUser, isAdminMode]);
 
   useEffect(() => {
     if (!isEditingProfile) return;
@@ -3559,7 +3577,7 @@ export default function PortalClient({
                         <Button
                           variant="secondary"
                           className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                          onClick={handleLogout}
+                          onClick={handleReturnToPortalHome}
                         >
                           처음 화면으로
                         </Button>
@@ -3992,7 +4010,7 @@ export default function PortalClient({
                         <Button
                           variant="secondary"
                           className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                          onClick={handleLogout}
+                          onClick={handleReturnToPortalHome}
                         >
                           처음 화면으로
                         </Button>
@@ -4227,7 +4245,7 @@ export default function PortalClient({
                         <Button
                           variant="secondary"
                           className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                          onClick={handleLogout}
+                          onClick={handleReturnToPortalHome}
                         >
                           처음 화면으로
                         </Button>
@@ -4269,7 +4287,7 @@ export default function PortalClient({
                             <Button
                               variant="secondary"
                               className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                              onClick={handleLogout}
+                              onClick={handleReturnToPortalHome}
                             >
                               처음 화면으로
                             </Button>

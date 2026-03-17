@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   getSessionUserFromCookies,
-  resolveSessionUser,
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { rejectIfCrossOrigin } from "@/lib/security";
@@ -61,8 +60,7 @@ export async function GET(request: Request) {
   }
 
   const supabase = createAdminClient();
-  const resolvedUser = await resolveSessionUser(supabase, user);
-  const targetStudentId = resolvedUser.role === "admin" ? studentIdFromQuery : resolvedUser.id;
+  const targetStudentId = user.role === "admin" ? studentIdFromQuery : user.id;
 
   if (!targetStudentId) {
     return NextResponse.json(
@@ -71,7 +69,7 @@ export async function GET(request: Request) {
     );
   }
 
-  if (resolvedUser.role !== "admin" && targetStudentId !== resolvedUser.id) {
+  if (user.role !== "admin" && targetStudentId !== user.id) {
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 
@@ -171,8 +169,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = createAdminClient();
-  const resolvedUser = await resolveSessionUser(supabase, user);
-  const targetStudentId = resolvedUser.role === "admin" ? studentIdFromBody : resolvedUser.id;
+  const targetStudentId = user.role === "admin" ? studentIdFromBody : user.id;
 
   if (!targetStudentId) {
     return NextResponse.json(
@@ -181,7 +178,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (resolvedUser.role !== "admin" && targetStudentId !== resolvedUser.id) {
+  if (user.role !== "admin" && targetStudentId !== user.id) {
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 
@@ -190,7 +187,7 @@ export async function POST(request: Request) {
   const nextAdminCommentRaw =
     body.adminComment === undefined ? undefined : String(body.adminComment ?? "");
 
-  if (resolvedUser.role !== "admin" && nextAdminCommentRaw !== undefined) {
+  if (user.role !== "admin" && nextAdminCommentRaw !== undefined) {
     return NextResponse.json(
       { ok: false, message: "학생은 관리자 댓글을 수정할 수 없습니다." },
       { status: 403 }
@@ -234,10 +231,10 @@ export async function POST(request: Request) {
   if (nextStudentNote !== undefined) {
     updatePayload.student_note = nextStudentNote;
     updatePayload.note_updated_at = now;
-    updatePayload.note_updated_by_role = resolvedUser.role;
+    updatePayload.note_updated_by_role = user.role;
   }
 
-  if (resolvedUser.role === "admin" && nextAdminComment !== undefined) {
+  if (user.role === "admin" && nextAdminComment !== undefined) {
     updatePayload.admin_comment = nextAdminComment;
     updatePayload.admin_comment_updated_at = now;
   }
@@ -266,11 +263,11 @@ export async function POST(request: Request) {
       season,
       round: safeRound,
       student_note: nextStudentNote ?? "",
-      admin_comment: resolvedUser.role === "admin" ? nextAdminComment ?? "" : "",
+      admin_comment: user.role === "admin" ? nextAdminComment ?? "" : "",
       note_updated_at: nextStudentNote !== undefined ? now : null,
-      note_updated_by_role: nextStudentNote !== undefined ? resolvedUser.role : null,
+      note_updated_by_role: nextStudentNote !== undefined ? user.role : null,
       admin_comment_updated_at:
-        resolvedUser.role === "admin" && nextAdminComment !== undefined ? now : null,
+        user.role === "admin" && nextAdminComment !== undefined ? now : null,
       created_at: now,
       updated_at: now,
     };
@@ -291,9 +288,9 @@ export async function POST(request: Request) {
     savedId = Number(inserted.id);
   }
 
-  if (resolvedUser.role === "admin") {
+  if (user.role === "admin") {
     await supabase.from("admin_action_logs").insert({
-      admin_id: resolvedUser.id,
+      admin_id: user.id,
       action_type: "season_feedback_note_update",
       target_student_id: targetStudentId,
       reason: `${season} ${safeRound} 메모/댓글 수정`,

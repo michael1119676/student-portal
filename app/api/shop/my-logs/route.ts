@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   getSessionUserFromCookies,
-  resolveSessionUser,
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { buildShopDeliveryScheduleText, getShopProductDeliveryKind } from "@/lib/shop";
@@ -12,13 +11,12 @@ export async function GET() {
   if (!user) return unauthorizedResponse();
 
   const supabase = createAdminClient();
-  const resolvedUser = await resolveSessionUser(supabase, user);
   const { data, error } = await supabase
     .from("coin_ledger")
     .select(
       "id, created_at, reason, delta, coin_before, coin_after, related_product_name, related_box_code, draw_log_id"
     )
-    .eq("student_id", resolvedUser.id)
+    .eq("student_id", user.id)
     .order("created_at", { ascending: false })
     .limit(300);
 
