@@ -466,6 +466,39 @@ const SCORE_LINE_COLOR = "#ec6a78";
 const SCORE_POINT_COLOR = "#ff4d6d";
 const SCORE_POINT_RING = "#ffe2e8";
 
+type StudentQuestionStatRow = {
+  question: number;
+  correctChoice: number | null;
+  myChoice: number | null;
+  isWrong: boolean;
+  choices: Array<{
+    choice: number;
+    count: number;
+    rate: number;
+  }>;
+};
+
+function roundToOneDecimal(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
+function getTopWrongQuestions(questionStats: StudentQuestionStatRow[]) {
+  return [...questionStats]
+    .filter((question) => question.correctChoice !== null)
+    .map((question) => {
+      const correctRate =
+        question.choices.find((choice) => choice.choice === question.correctChoice)?.rate ?? 0;
+
+      return {
+        ...question,
+        correctRate,
+        wrongRate: roundToOneDecimal(Math.max(0, 100 - correctRate)),
+      };
+    })
+    .sort((a, b) => b.wrongRate - a.wrongRate || a.question - b.question)
+    .slice(0, 5);
+}
+
 export default function PortalClient({
   mode = "student",
   initialSessionUser = null,
@@ -587,6 +620,11 @@ export default function PortalClient({
     return seasonCData.details.find((detail) => detail.round === selectedRound) ?? null;
   }, [seasonCData, selectedRound]);
 
+  const selectedRoundTopWrongQuestions = useMemo(
+    () => getTopWrongQuestions(selectedRoundDetail?.questionStats ?? []),
+    [selectedRoundDetail]
+  );
+
   const myPlotPoints = useMemo(() => {
     if (!seasonCData || seasonCData.rounds.length === 0) return [];
 
@@ -606,6 +644,11 @@ export default function PortalClient({
     if (!seasonNData || selectedNRound === null) return null;
     return seasonNData.details.find((detail) => detail.round === selectedNRound) ?? null;
   }, [seasonNData, selectedNRound]);
+
+  const selectedNRoundTopWrongQuestions = useMemo(
+    () => getTopWrongQuestions(selectedNRoundDetail?.questionStats ?? []),
+    [selectedNRoundDetail]
+  );
 
   const selectedPremiumRoundDetail = useMemo(() => {
     if (!premiumData || selectedPremiumRound === null) return null;
@@ -3277,8 +3320,8 @@ export default function PortalClient({
                               C시즌 {selectedRoundDetail.round}회 상세 통계
                             </CardTitle>
                             <CardDescription className="text-white/55">
-                              내 점수와 분포, 반별 통계, 문항별 선지 선택률을 확인할 수
-                              있습니다.
+                              내 점수와 분포, 반별 통계, 오답률 탑 5, 문항별 선지 선택률을
+                              확인할 수 있습니다.
                             </CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-6">
@@ -3357,18 +3400,18 @@ export default function PortalClient({
                                   </table>
                                 </div>
                               </div>
-
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                                 <div className="border-b border-white/10 px-4 py-3">
                                   <p className="text-sm text-white/55">
-                                    문항별 선지 선택률 (정답/내답 포함, 스크롤 가능)
+                                    오답률 탑 5 (정답/내답 포함)
                                   </p>
                                 </div>
                                 <div className="max-h-[300px] overflow-auto">
-                                  <table className="w-full min-w-[560px] text-sm">
+                                  <table className="w-full min-w-[620px] text-sm">
                                     <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
                                       <tr>
                                         <th className="px-3 py-3 text-left">문항</th>
+                                        <th className="px-3 py-3 text-left">오답률</th>
                                         <th className="px-3 py-3 text-left">정답</th>
                                         <th className="px-3 py-3 text-left">내답</th>
                                         <th className="px-3 py-3 text-left">1</th>
@@ -3379,14 +3422,17 @@ export default function PortalClient({
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {selectedRoundDetail.questionStats.map((question) => (
+                                      {selectedRoundTopWrongQuestions.map((question) => (
                                         <tr
-                                          key={question.question}
+                                          key={`c-top-${question.question}`}
                                           className={`border-t border-white/10 ${
                                             question.isWrong ? "bg-red-500/10" : ""
                                           }`}
                                         >
                                           <td className="px-3 py-3">{question.question}번</td>
+                                          <td className="px-3 py-3 font-semibold text-rose-200">
+                                            {question.wrongRate}%
+                                          </td>
                                           <td className="px-3 py-3 text-emerald-300">
                                             {question.correctChoice ?? "-"}
                                           </td>
@@ -3401,7 +3447,7 @@ export default function PortalClient({
                                           </td>
                                           {question.choices.map((choice) => (
                                             <td
-                                              key={choice.choice}
+                                              key={`c-top-${question.question}-${choice.choice}`}
                                               className={`px-3 py-3 ${
                                                 choice.choice === question.correctChoice
                                                   ? "font-semibold text-emerald-300"
@@ -3413,9 +3459,79 @@ export default function PortalClient({
                                           ))}
                                         </tr>
                                       ))}
+                                      {selectedRoundTopWrongQuestions.length === 0 && (
+                                        <tr>
+                                          <td
+                                            colSpan={9}
+                                            className="px-3 py-6 text-center text-white/55"
+                                          >
+                                            표시할 오답률 데이터가 없습니다.
+                                          </td>
+                                        </tr>
+                                      )}
                                     </tbody>
                                   </table>
                                 </div>
+                              </div>
+                            </div>
+
+                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                              <div className="border-b border-white/10 px-4 py-3">
+                                <p className="text-sm text-white/55">
+                                  문항별 선지 선택률 (정답/내답 포함, 스크롤 가능)
+                                </p>
+                              </div>
+                              <div className="max-h-[300px] overflow-auto">
+                                <table className="w-full min-w-[560px] text-sm">
+                                  <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
+                                    <tr>
+                                      <th className="px-3 py-3 text-left">문항</th>
+                                      <th className="px-3 py-3 text-left">정답</th>
+                                      <th className="px-3 py-3 text-left">내답</th>
+                                      <th className="px-3 py-3 text-left">1</th>
+                                      <th className="px-3 py-3 text-left">2</th>
+                                      <th className="px-3 py-3 text-left">3</th>
+                                      <th className="px-3 py-3 text-left">4</th>
+                                      <th className="px-3 py-3 text-left">5</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {selectedRoundDetail.questionStats.map((question) => (
+                                      <tr
+                                        key={question.question}
+                                        className={`border-t border-white/10 ${
+                                          question.isWrong ? "bg-red-500/10" : ""
+                                        }`}
+                                      >
+                                        <td className="px-3 py-3">{question.question}번</td>
+                                        <td className="px-3 py-3 text-emerald-300">
+                                          {question.correctChoice ?? "-"}
+                                        </td>
+                                        <td
+                                          className={`px-3 py-3 ${
+                                            question.isWrong
+                                              ? "font-semibold text-red-300"
+                                              : "text-white"
+                                          }`}
+                                        >
+                                          {question.myChoice ?? "-"}
+                                        </td>
+                                        {question.choices.map((choice) => (
+                                          <td
+                                            key={choice.choice}
+                                            className={`px-3 py-3 ${
+                                              choice.choice === question.correctChoice
+                                                ? "font-semibold text-emerald-300"
+                                                : ""
+                                            }`}
+                                          >
+                                            {choice.rate}%
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
                             </div>
                             <p className="text-xs text-white/50">
@@ -3607,8 +3723,8 @@ export default function PortalClient({
                               N시즌 {selectedNRoundDetail.round}회 상세 통계
                             </CardTitle>
                             <CardDescription className="text-white/55">
-                              내 점수, 비교(표준점수/컷), 반별 통계, 문항별 선지 선택률
-                              확인이 가능합니다.
+                              내 점수, 비교(표준점수/컷), 반별 통계, 오답률 탑 5,
+                              문항별 선지 선택률 확인이 가능합니다.
                             </CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-6">
@@ -3717,18 +3833,18 @@ export default function PortalClient({
                                   </table>
                                 </div>
                               </div>
-
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                                 <div className="border-b border-white/10 px-4 py-3">
                                   <p className="text-sm text-white/55">
-                                    문항별 선지 선택률 (정답/내답 포함, 스크롤 가능)
+                                    오답률 탑 5 (정답/내답 포함)
                                   </p>
                                 </div>
                                 <div className="max-h-[300px] overflow-auto">
-                                  <table className="w-full min-w-[560px] text-sm">
+                                  <table className="w-full min-w-[620px] text-sm">
                                     <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
                                       <tr>
                                         <th className="px-3 py-3 text-left">문항</th>
+                                        <th className="px-3 py-3 text-left">오답률</th>
                                         <th className="px-3 py-3 text-left">정답</th>
                                         <th className="px-3 py-3 text-left">내답</th>
                                         <th className="px-3 py-3 text-left">1</th>
@@ -3739,14 +3855,17 @@ export default function PortalClient({
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {selectedNRoundDetail.questionStats.map((question) => (
+                                      {selectedNRoundTopWrongQuestions.map((question) => (
                                         <tr
-                                          key={question.question}
+                                          key={`n-top-${question.question}`}
                                           className={`border-t border-white/10 ${
                                             question.isWrong ? "bg-red-500/10" : ""
                                           }`}
                                         >
                                           <td className="px-3 py-3">{question.question}번</td>
+                                          <td className="px-3 py-3 font-semibold text-rose-200">
+                                            {question.wrongRate}%
+                                          </td>
                                           <td className="px-3 py-3 text-emerald-300">
                                             {question.correctChoice ?? "-"}
                                           </td>
@@ -3761,7 +3880,7 @@ export default function PortalClient({
                                           </td>
                                           {question.choices.map((choice) => (
                                             <td
-                                              key={choice.choice}
+                                              key={`n-top-${question.question}-${choice.choice}`}
                                               className={`px-3 py-3 ${
                                                 choice.choice === question.correctChoice
                                                   ? "font-semibold text-emerald-300"
@@ -3773,9 +3892,79 @@ export default function PortalClient({
                                           ))}
                                         </tr>
                                       ))}
+                                      {selectedNRoundTopWrongQuestions.length === 0 && (
+                                        <tr>
+                                          <td
+                                            colSpan={9}
+                                            className="px-3 py-6 text-center text-white/55"
+                                          >
+                                            표시할 오답률 데이터가 없습니다.
+                                          </td>
+                                        </tr>
+                                      )}
                                     </tbody>
                                   </table>
                                 </div>
+                              </div>
+                            </div>
+
+                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                              <div className="border-b border-white/10 px-4 py-3">
+                                <p className="text-sm text-white/55">
+                                  문항별 선지 선택률 (정답/내답 포함, 스크롤 가능)
+                                </p>
+                              </div>
+                              <div className="max-h-[300px] overflow-auto">
+                                <table className="w-full min-w-[560px] text-sm">
+                                  <thead className="sticky top-0 bg-[#0b0d12] text-white/55">
+                                    <tr>
+                                      <th className="px-3 py-3 text-left">문항</th>
+                                      <th className="px-3 py-3 text-left">정답</th>
+                                      <th className="px-3 py-3 text-left">내답</th>
+                                      <th className="px-3 py-3 text-left">1</th>
+                                      <th className="px-3 py-3 text-left">2</th>
+                                      <th className="px-3 py-3 text-left">3</th>
+                                      <th className="px-3 py-3 text-left">4</th>
+                                      <th className="px-3 py-3 text-left">5</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {selectedNRoundDetail.questionStats.map((question) => (
+                                      <tr
+                                        key={question.question}
+                                        className={`border-t border-white/10 ${
+                                          question.isWrong ? "bg-red-500/10" : ""
+                                        }`}
+                                      >
+                                        <td className="px-3 py-3">{question.question}번</td>
+                                        <td className="px-3 py-3 text-emerald-300">
+                                          {question.correctChoice ?? "-"}
+                                        </td>
+                                        <td
+                                          className={`px-3 py-3 ${
+                                            question.isWrong
+                                              ? "font-semibold text-red-300"
+                                              : "text-white"
+                                          }`}
+                                        >
+                                          {question.myChoice ?? "-"}
+                                        </td>
+                                        {question.choices.map((choice) => (
+                                          <td
+                                            key={choice.choice}
+                                            className={`px-3 py-3 ${
+                                              choice.choice === question.correctChoice
+                                                ? "font-semibold text-emerald-300"
+                                                : ""
+                                            }`}
+                                          >
+                                            {choice.rate}%
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
                             </div>
                             <p className="text-xs text-white/50">
