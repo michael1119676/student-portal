@@ -1122,7 +1122,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                    <div className="relative h-24 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
                       {waitingMediaSrc ? (
                         waitingIsVideo ? (
                           <video
