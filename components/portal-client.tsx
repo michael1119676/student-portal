@@ -462,6 +462,10 @@ function buildSmoothPath(points: Array<{ x: number; y: number }>) {
   return d;
 }
 
+const SCORE_LINE_COLOR = "#ec6a78";
+const SCORE_POINT_COLOR = "#ff4d6d";
+const SCORE_POINT_RING = "#ffe2e8";
+
 export default function PortalClient({
   mode = "student",
   initialSessionUser = null,
@@ -3173,7 +3177,7 @@ export default function PortalClient({
                                         <path
                                           d={smoothLinePath}
                                           fill="none"
-                                          stroke="#ec6a78"
+                                          stroke={SCORE_LINE_COLOR}
                                           strokeWidth="1.6"
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
@@ -3181,14 +3185,23 @@ export default function PortalClient({
                                         />
                                       )}
                                       {myPlotPoints.map((point, index) => (
-                                        <circle
-                                          key={`my-point-${index}`}
-                                          cx={point.x}
-                                          cy={point.y}
-                                          fill="#ec6a78"
-                                          fillOpacity="0.96"
-                                          r="1.1"
-                                        />
+                                        <g key={`my-point-${index}`}>
+                                          <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            fill={SCORE_POINT_COLOR}
+                                            fillOpacity="0.28"
+                                            r="1.9"
+                                          />
+                                          <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            fill={SCORE_POINT_COLOR}
+                                            stroke={SCORE_POINT_RING}
+                                            strokeWidth="0.42"
+                                            r="1.32"
+                                          />
+                                        </g>
                                       ))}
                                     </svg>
                                   )}
@@ -3495,7 +3508,7 @@ export default function PortalClient({
                                         <path
                                           d={nSmoothLinePath}
                                           fill="none"
-                                          stroke="#ec6a78"
+                                          stroke={SCORE_LINE_COLOR}
                                           strokeWidth="1.6"
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
@@ -3503,14 +3516,23 @@ export default function PortalClient({
                                         />
                                       )}
                                       {nPlotPoints.map((point, index) => (
-                                        <circle
-                                          key={`n-point-${index}`}
-                                          cx={point.x}
-                                          cy={point.y}
-                                          fill="#ec6a78"
-                                          fillOpacity="0.96"
-                                          r="1.1"
-                                        />
+                                        <g key={`n-point-${index}`}>
+                                          <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            fill={SCORE_POINT_COLOR}
+                                            fillOpacity="0.28"
+                                            r="1.9"
+                                          />
+                                          <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            fill={SCORE_POINT_COLOR}
+                                            stroke={SCORE_POINT_RING}
+                                            strokeWidth="0.42"
+                                            r="1.32"
+                                          />
+                                        </g>
                                       ))}
                                     </svg>
                                   )}
@@ -3845,7 +3867,7 @@ export default function PortalClient({
                                         <path
                                           d={premiumSmoothLinePath}
                                           fill="none"
-                                          stroke="#ec6a78"
+                                          stroke={SCORE_LINE_COLOR}
                                           strokeWidth="1.6"
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
@@ -3853,14 +3875,23 @@ export default function PortalClient({
                                         />
                                       )}
                                       {premiumPlotPoints.map((point, index) => (
-                                        <circle
-                                          key={`premium-point-${index}`}
-                                          cx={point.x}
-                                          cy={point.y}
-                                          fill="#ec6a78"
-                                          fillOpacity="0.96"
-                                          r="1.1"
-                                        />
+                                        <g key={`premium-point-${index}`}>
+                                          <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            fill={SCORE_POINT_COLOR}
+                                            fillOpacity="0.28"
+                                            r="1.9"
+                                          />
+                                          <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            fill={SCORE_POINT_COLOR}
+                                            stroke={SCORE_POINT_RING}
+                                            strokeWidth="0.42"
+                                            r="1.32"
+                                          />
+                                        </g>
                                       ))}
                                     </svg>
                                   )}
