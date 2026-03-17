@@ -265,6 +265,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryReason, setInventoryReason] = useState("");
   const [inventoryDraft, setInventoryDraft] = useState<Record<string, string>>({});
+  const [inventoryAppliedMap, setInventoryAppliedMap] = useState<Record<string, boolean>>({});
+  const [inventorySavingProductId, setInventorySavingProductId] = useState<string | null>(null);
   const [newProductName, setNewProductName] = useState("");
   const [newProductQty, setNewProductQty] = useState("");
   const [newProductProb, setNewProductProb] = useState("");
@@ -373,7 +375,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     setStudents((data.students ?? []) as AdminStudent[]);
   }, [isAdmin]);
 
-  const fetchInventory = useCallback(async () => {
+  const fetchInventory = useCallback(async (appliedProductId?: string | null) => {
     if (!isAdmin) return;
     setInventoryLoading(true);
     try {
@@ -394,6 +396,13 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           return acc;
         }, {})
       );
+      setInventoryAppliedMap(() => {
+        if (!appliedProductId) return {};
+        const stillExists = nextBoxes.some((box) =>
+          box.products.some((product) => product.id === appliedProductId)
+        );
+        return stillExists ? { [appliedProductId]: true } : {};
+      });
       if (nextBoxes.length > 0 && !nextBoxes.some((box) => box.code === inventoryBoxCode)) {
         setInventoryBoxCode(nextBoxes[0].code);
       }
@@ -712,24 +721,31 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       return;
     }
 
-    const res = await fetch("/api/admin/shop/inventory", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        productId,
-        remainingQuantity: Math.max(0, Math.round(nextQuantity)),
-        reason: inventoryReason.trim(),
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      setMessage(data.message || "재고 수정에 실패했습니다.");
-      return;
-    }
+    try {
+      setInventorySavingProductId(productId);
+      const res = await fetch("/api/admin/shop/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId,
+          remainingQuantity: Math.max(0, Math.round(nextQuantity)),
+          reason: inventoryReason.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setMessage(data.message || "재고 수정에 실패했습니다.");
+        return;
+      }
 
-    setMessage(data.message || "재고 수정 완료");
-    await fetchOverview();
-    await fetchInventory();
+      setMessage(data.message || "재고 수정 완료");
+      await fetchOverview();
+      await fetchInventory(productId);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "재고 수정에 실패했습니다.");
+    } finally {
+      setInventorySavingProductId(null);
+    }
   };
 
   const handleAddProduct = async () => {
@@ -1368,55 +1384,77 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                             </td>
                           </tr>
                         ) : (
-                          (selectedInventoryBox?.products ?? []).map((product) => (
-                            <tr key={product.id} className="border-t border-white/10">
-                              <td className="px-3 py-2">{product.name}</td>
-                              <td className="px-3 py-2">{product.initialQuantity}</td>
-                              <td className="px-3 py-2">
-                                <Input
-                                  value={inventoryDraft[product.id] ?? String(product.remainingQuantity)}
-                                  onChange={(e) =>
-                                    setInventoryDraft((prev) => ({
-                                      ...prev,
-                                      [product.id]: e.target.value.replace(/[^\d-]/g, ""),
-                                    }))
-                                  }
-                                  className="h-9 w-24 rounded-lg border-white/15 bg-black/30 text-white"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                {product.baseProbabilityPercent === null
-                                  ? "-"
-                                  : product.baseProbabilityPercent.toFixed(4)}
-                              </td>
-                              <td className="px-3 py-2">
-                                {selectedInventoryRealtimeProbability.get(product.id) === null ||
-                                selectedInventoryRealtimeProbability.get(product.id) === undefined
-                                  ? "-"
-                                  : (selectedInventoryRealtimeProbability.get(product.id) as number).toFixed(
-                                      4
-                                    )}
-                              </td>
-                              <td className="px-3 py-2">
-                                {product.isRare ? (
-                                  <span className="rounded-full border border-rose-300/35 bg-rose-500/20 px-2 py-0.5 text-xs text-rose-100">
-                                    희귀
-                                  </span>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                              <td className="px-3 py-2">
-                                <Button
-                                  variant="secondary"
-                                  className="rounded-lg bg-white/10 text-white hover:bg-white/20"
-                                  onClick={() => void handleInventorySave(product.id)}
-                                >
-                                  즉시 반영
-                                </Button>
-                              </td>
-                            </tr>
-                          ))
+                          (selectedInventoryBox?.products ?? []).map((product) => {
+                            const draftValue =
+                              inventoryDraft[product.id] ?? String(product.remainingQuantity);
+                            const hasInventoryChange =
+                              draftValue !== String(product.remainingQuantity);
+                            const isApplied =
+                              !!inventoryAppliedMap[product.id] && !hasInventoryChange;
+                            const isSaving = inventorySavingProductId === product.id;
+
+                            return (
+                              <tr key={product.id} className="border-t border-white/10">
+                                <td className="px-3 py-2">{product.name}</td>
+                                <td className="px-3 py-2">{product.initialQuantity}</td>
+                                <td className="px-3 py-2">
+                                  <Input
+                                    value={draftValue}
+                                    onChange={(e) => {
+                                      const nextValue = e.target.value.replace(/[^\d-]/g, "");
+                                      setInventoryDraft((prev) => ({
+                                        ...prev,
+                                        [product.id]: nextValue,
+                                      }));
+                                      setInventoryAppliedMap((prev) => {
+                                        if (!prev[product.id]) return prev;
+                                        const next = { ...prev };
+                                        delete next[product.id];
+                                        return next;
+                                      });
+                                    }}
+                                    className="h-9 w-24 rounded-lg border-white/15 bg-black/30 text-white"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  {product.baseProbabilityPercent === null
+                                    ? "-"
+                                    : product.baseProbabilityPercent.toFixed(4)}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {selectedInventoryRealtimeProbability.get(product.id) === null ||
+                                  selectedInventoryRealtimeProbability.get(product.id) === undefined
+                                    ? "-"
+                                    : (selectedInventoryRealtimeProbability.get(product.id) as number).toFixed(
+                                        4
+                                      )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {product.isRare ? (
+                                    <span className="rounded-full border border-rose-300/35 bg-rose-500/20 px-2 py-0.5 text-xs text-rose-100">
+                                      희귀
+                                    </span>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <Button
+                                    variant="secondary"
+                                    className={`rounded-lg ${
+                                      isApplied
+                                        ? "bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/20"
+                                        : "bg-white/10 text-white hover:bg-white/20"
+                                    }`}
+                                    disabled={isSaving || isApplied}
+                                    onClick={() => void handleInventorySave(product.id)}
+                                  >
+                                    {isSaving ? "반영 중..." : isApplied ? "적용 완료" : "즉시 반영"}
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })
                         )}
                         {!inventoryLoading && !selectedInventoryBox?.products.length && (
                           <tr>

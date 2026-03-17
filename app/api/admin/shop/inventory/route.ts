@@ -185,8 +185,11 @@ export async function POST(request: Request) {
   });
 
   if (error) {
+    const detailMessage = [error.message, (error as { details?: string }).details, (error as { hint?: string }).hint]
+      .filter((value) => typeof value === "string" && value.trim().length > 0)
+      .join(" | ");
     return NextResponse.json(
-      { ok: false, message: `재고 수정 실패: ${error.message}` },
+      { ok: false, message: `재고 수정 실패: ${detailMessage || error.message}` },
       { status: 500 }
     );
   }

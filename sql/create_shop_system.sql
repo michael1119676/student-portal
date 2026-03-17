@@ -765,6 +765,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+#variable_conflict use_column
 declare
   v_before integer;
   v_after integer;
@@ -796,11 +797,11 @@ begin
   v_before := v_product.remaining_quantity;
   v_after := p_remaining_quantity;
 
-  update public.box_inventory
+  update public.box_inventory as bi
   set
     remaining_quantity = v_after,
     updated_at = now()
-  where product_id = p_product_id;
+  where bi.product_id = p_product_id;
 
   insert into public.admin_action_logs (
     admin_id,
