@@ -458,6 +458,37 @@ function ScriptLogo() {
   );
 }
 
+function IntroWriteLine({
+  text,
+  delay,
+  className,
+  cursorClassName,
+}: {
+  text: string;
+  delay: number;
+  className: string;
+  cursorClassName?: string;
+}) {
+  return (
+    <div className="relative inline-flex max-w-full overflow-hidden whitespace-nowrap">
+      <motion.div
+        initial={{ width: 0, opacity: 0.35 }}
+        animate={{ width: "100%", opacity: 1 }}
+        transition={{ duration: 1.05, delay, ease: [0.22, 1, 0.36, 1] }}
+        className="overflow-hidden"
+      >
+        <span className={className}>{text}</span>
+      </motion.div>
+      <motion.span
+        initial={{ opacity: 0, x: 0 }}
+        animate={{ opacity: [0, 1, 0.4, 0], x: ["0%", "100%", "100%", "100%"] }}
+        transition={{ duration: 1.05, delay, ease: "easeInOut" }}
+        className={`absolute inset-y-0 right-0 w-[2px] rounded-full bg-white/90 shadow-[0_0_18px_rgba(255,255,255,0.8)] ${cursorClassName ?? ""}`}
+      />
+    </div>
+  );
+}
+
 function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
   const prefersReducedMotion = useReducedMotion();
   const [isCompactIntro, setIsCompactIntro] = useState(false);
@@ -625,28 +656,39 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
               transition={{ duration: 5.8, repeat: Infinity, ease: "linear" }}
             />
           )}
-          <div className="relative z-10 text-center">
+          <div className="relative z-10 flex flex-col items-center gap-3 text-center">
             <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.9 }}
+              initial={{ opacity: 0, y: 24, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.72, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.72, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="relative"
             >
-              <ScriptLogo />
+              <div className="absolute -inset-x-8 -inset-y-6 rounded-full bg-sky-400/12 blur-3xl" />
+              <IntroWriteLine
+                text="한스 피직스"
+                delay={0.38}
+                className='relative text-5xl tracking-[0.08em] text-white drop-shadow-[0_10px_35px_rgba(255,255,255,0.18)] sm:text-7xl'
+                cursorClassName="bg-sky-100/95"
+              />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.88 }}
+            >
+              <IntroWriteLine
+                text="프리미엄 물2 서비스"
+                delay={1.08}
+                className="text-sm tracking-[0.32em] text-white/68 sm:text-lg"
+                cursorClassName="bg-white/90"
+              />
             </motion.div>
           </div>
-          <motion.p
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.72, delay: 0.72 }}
-            className="max-w-2xl text-center text-xs tracking-[0.22em] text-white/60 uppercase sm:text-base"
-          >
-            Premium Physics II Experience
-          </motion.p>
           <motion.div
             initial={{ opacity: 0, scaleX: 0.2 }}
             animate={{ opacity: 1, scaleX: 1 }}
-            transition={{ duration: 1.8, delay: 0.95, ease: "easeOut" }}
-            className="relative mt-2 h-px w-56 origin-center overflow-hidden bg-white/12"
+            transition={{ duration: 1.3, delay: 1.3, ease: "easeOut" }}
+            className="relative mt-1 h-px w-48 origin-center overflow-hidden bg-white/12 sm:w-56"
           >
             <motion.div
               className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white to-transparent"
@@ -3401,7 +3443,7 @@ export default function PortalClient({
                       <p className="text-base text-white/55 sm:text-lg">
                         {isAdminMode
                           ? "관리자 로그인 상태로 학생 화면과 동일하게 확인할 수 있습니다."
-                          : "C 시즌 / N 시즌 / M 시즌 / 더프리미엄 모의고사 / 서바이벌 프리미엄 중 원하는 항목을 눌러 성적 화면으로 이동할 수 있습니다."}
+                          : "C 시즌 / N 시즌 / M 시즌 / 더프리미엄 모의고사 / 서바이벌 프로 중 원하는 항목을 눌러 성적 화면으로 이동할 수 있습니다."}
                       </p>
                     </div>
 

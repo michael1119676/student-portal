@@ -12,7 +12,7 @@ export const PREMIUM_SEASON_META = {
   SP: {
     badge: "서프",
     shortTitle: "서프",
-    title: "서바이벌 프리미엄",
+    title: "서바이벌 프로",
     subtitle: "월별 서프 물리학 II 통계 확인",
   },
 } as const;
