@@ -1,0 +1,9 @@
+<svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="320" rx="32" fill="#FFFFFF"/>
+  <path d="M77 108H162L148 148H91L94 171H144L131 211H78L77 108Z" fill="#1650B8"/>
+  <path d="M169 108H261L252 141H204L200 159H246L238 190H194L191 211H182L169 108Z" fill="#1650B8"/>
+  <path d="M126 108H162L151 141H135L126 108Z" fill="#83C421"/>
+  <path d="M218 108H262L258 130L240 211H199L202 190H238L246 141H214L218 108Z" fill="#83C421" fill-opacity="0.9"/>
+  <text x="160" y="246" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#787878">대한치과의사협회</text>
+  <text x="160" y="274" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" letter-spacing="1.1" fill="#969696">KOREAN DENTAL ASSOCIATION</text>
+</svg>

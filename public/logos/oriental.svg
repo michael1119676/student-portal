@@ -1,0 +1,7 @@
+<svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="320" rx="32" fill="#FFFFFF"/>
+  <path d="M71 214C116 175 151 160 177 168C197 174 214 191 229 221C207 211 189 208 173 211C155 214 133 225 105 244L71 214Z" fill="#203B8D"/>
+  <path d="M91 116C136 89 172 84 200 100C221 113 236 138 244 174C222 161 202 154 183 154C162 154 136 162 105 178L91 116Z" fill="#ED1C24"/>
+  <path d="M78 210C102 196 122 187 139 185C159 183 182 188 208 200" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+  <text x="160" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#203B8D">한의대</text>
+</svg>

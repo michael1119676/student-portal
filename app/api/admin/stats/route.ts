@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 
   if (season === "M") {
     return NextResponse.json(
-      { ok: false, message: "M 시즌 통계는 업데이트 예정입니다." },
+      { ok: false, message: "M 시즌은 개강 전 입니다." },
       { status: 400 }
     );
   }

@@ -332,6 +332,38 @@ const universityProfiles = {
     label: "KAIST",
     image: "/logos/kaist.png",
   },
+  sogang: {
+    label: "서강대학교",
+    image: "/logos/sogang.svg",
+  },
+  skku: {
+    label: "성균관대학교",
+    image: "/logos/skku.svg",
+  },
+  medical: {
+    label: "의대",
+    image: "/logos/medical.svg",
+  },
+  oriental: {
+    label: "한의대",
+    image: "/logos/oriental.svg",
+  },
+  veterinary: {
+    label: "수의대",
+    image: "/logos/veterinary.svg",
+  },
+  pharmacy: {
+    label: "약대",
+    image: "/logos/pharmacy.svg",
+  },
+  dental: {
+    label: "치대",
+    image: "/logos/dental.svg",
+  },
+  public_health: {
+    label: "보건계열",
+    image: "/logos/public-health.svg",
+  },
 } as const;
 
 const subjectOptions = {
@@ -4605,15 +4637,19 @@ export default function PortalClient({
                         <CardHeader>
                           <CardTitle className="text-3xl">{selectedSeason} 시즌</CardTitle>
                           <CardDescription className="text-white/55">
-                            {selectedSeason === "N" || selectedSeason === "M"
-                              ? `${selectedSeason} 시즌은 현재 업데이트 예정입니다.`
+                            {selectedSeason === "M"
+                              ? "M 시즌은 개강 전 입니다."
+                              : selectedSeason === "N"
+                                ? "N 시즌은 현재 업데이트 예정입니다."
                               : "이 시즌은 아직 연결 전입니다. 먼저 시즌 C 화면을 완성해둔 상태입니다."}
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-6 text-white/70">
-                            {selectedSeason === "N" || selectedSeason === "M"
-                              ? "업데이트 예정입니다. 조금만 기다려 주세요."
+                            {selectedSeason === "M"
+                              ? "M 시즌은 개강 전 입니다."
+                              : selectedSeason === "N"
+                                ? "업데이트 예정입니다. 조금만 기다려 주세요."
                               : `다음 연결 대상: /season/${selectedSeason.toLowerCase()}`}
                           </div>
                           <div className="flex flex-wrap gap-3">

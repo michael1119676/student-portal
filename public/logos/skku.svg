@@ -1,0 +1,8 @@
+<svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="320" rx="32" fill="#FFFFFF"/>
+  <circle cx="160" cy="120" r="72" fill="#C9E86F"/>
+  <path d="M205 66C170 51 118 63 97 98C79 128 85 164 110 184C136 206 174 208 204 189L184 160C165 172 141 171 126 159C111 147 107 126 118 109C131 89 161 81 187 91L205 66Z" fill="#183E8E"/>
+  <path d="M219 58C244 83 251 118 238 149C226 178 198 197 165 201L165 174C184 170 201 157 208 139C216 119 212 97 198 81L219 58Z" fill="#7BC043"/>
+  <text x="160" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#5E5E5E">성균관대학교</text>
+  <text x="160" y="274" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" letter-spacing="1.2" fill="#7E7E7E">SUNGKYUNKWAN UNIVERSITY</text>
+</svg>
