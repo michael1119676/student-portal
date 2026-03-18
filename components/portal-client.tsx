@@ -665,7 +665,7 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
             >
               <div className="absolute -inset-x-8 -inset-y-6 rounded-full bg-sky-400/12 blur-3xl" />
               <IntroWriteLine
-                text="한스 피직스"
+                text="HAN'S PHYSICS"
                 delay={0.38}
                 className='relative text-5xl tracking-[0.08em] text-white drop-shadow-[0_10px_35px_rgba(255,255,255,0.18)] sm:text-7xl'
                 cursorClassName="bg-sky-100/95"
@@ -677,7 +677,7 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
               transition={{ duration: 0.55, delay: 0.88 }}
             >
               <IntroWriteLine
-                text="프리미엄 물2 서비스"
+                text="PREMIUM PHYSICS II SERVICE"
                 delay={1.08}
                 className="text-sm tracking-[0.32em] text-white/68 sm:text-lg"
                 cursorClassName="bg-white/90"
