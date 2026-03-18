@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -377,7 +377,7 @@ const quickLinks = [
 ];
 
 const LOGIN_INTRO_SESSION_KEY = "portal-login-intro-seen";
-const LOGIN_INTRO_DURATION_MS = 4300;
+const LOGIN_INTRO_DURATION_MS = 4000;
 
 function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
@@ -473,33 +473,56 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
       transition={{ duration: 0.45, ease: "easeOut" }}
       className="fixed inset-0 z-[90] overflow-hidden bg-[#020407]"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.14),transparent_20%),radial-gradient(circle_at_50%_45%,rgba(56,189,248,0.16),transparent_32%),linear-gradient(180deg,rgba(5,8,13,0.4),rgba(2,3,6,0.94))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,rgba(255,255,255,0.16),transparent_18%),radial-gradient(circle_at_50%_44%,rgba(56,189,248,0.18),transparent_28%),linear-gradient(180deg,rgba(10,14,20,0.24),rgba(3,5,8,0.94))]" />
+      <div className="absolute inset-0 bg-[linear-gradient(transparent_0%,rgba(255,255,255,0.03)_48%,transparent_100%)] bg-[length:100%_5px] opacity-20" />
 
       <motion.div
-        className="absolute left-1/2 top-1/2 h-[46rem] w-[46rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8"
-        animate={{ rotate: 360, scale: [0.96, 1.02, 0.98] }}
-        transition={{ rotate: { duration: 18, repeat: Infinity, ease: "linear" }, scale: { duration: 5.5, repeat: Infinity, ease: "easeInOut" } }}
+        className="absolute left-1/2 top-1/2 h-[50rem] w-[50rem] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-80"
+        style={{
+          background:
+            "conic-gradient(from 0deg, rgba(255,255,255,0.02), rgba(255,255,255,0.14), rgba(56,189,248,0.08), rgba(255,255,255,0.02) 62%, rgba(255,255,255,0.12), rgba(255,255,255,0.02))",
+          filter: "blur(1px)",
+        }}
+        animate={{ rotate: 360, scale: [0.96, 1.01, 0.97] }}
+        transition={{
+          rotate: { duration: 14, repeat: Infinity, ease: "linear" },
+          scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+        }}
       />
+      <motion.div
+        className="absolute left-1/2 top-1/2 h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8"
+        animate={{ rotate: -360, opacity: [0.18, 0.45, 0.18] }}
+        transition={{
+          rotate: { duration: 11, repeat: Infinity, ease: "linear" },
+          opacity: { duration: 2.6, repeat: Infinity, ease: "easeInOut" },
+        }}
+      />
+      <motion.div
+        className="absolute left-1/2 top-1/2 h-[25rem] w-[25rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(56,189,248,0.12) 22%, rgba(56,189,248,0.04) 42%, transparent 70%)",
+          filter: "blur(6px)",
+        }}
+        animate={{ scale: [0.88, 1.08, 0.9], opacity: [0.24, 0.58, 0.28] }}
+        transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+      />
+
       <motion.div
         className="absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-300/16"
-        animate={{ rotate: -360, opacity: [0.22, 0.48, 0.22] }}
-        transition={{ rotate: { duration: 14, repeat: Infinity, ease: "linear" }, opacity: { duration: 4.2, repeat: Infinity, ease: "easeInOut" } }}
-      />
-      <motion.div
-        className="absolute left-1/2 top-1/2 h-[22rem] w-[22rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-300/10 blur-3xl"
-        animate={{ scale: [0.88, 1.06, 0.92], opacity: [0.28, 0.58, 0.34] }}
-        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+        animate={{ scale: [0.75, 1.04], opacity: [0.75, 0] }}
+        transition={{ duration: 1.3, repeat: Infinity, ease: "easeOut" }}
       />
 
       <motion.div
-        className="absolute left-[-20%] top-[22%] h-px w-[140%] bg-gradient-to-r from-transparent via-white/55 to-transparent"
-        animate={{ x: ["-8%", "10%"], opacity: [0, 0.75, 0] }}
-        transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 0.55, ease: "easeInOut" }}
+        className="absolute left-[-12%] top-[22%] h-px w-[124%] bg-gradient-to-r from-transparent via-white/75 to-transparent"
+        animate={{ x: ["-8%", "16%"], opacity: [0, 0.9, 0] }}
+        transition={{ duration: 1.15, repeat: Infinity, repeatDelay: 0.18, ease: "easeInOut" }}
       />
       <motion.div
-        className="absolute left-[-15%] top-[58%] h-px w-[130%] bg-gradient-to-r from-transparent via-sky-300/45 to-transparent"
-        animate={{ x: ["8%", "-10%"], opacity: [0, 0.55, 0] }}
-        transition={{ duration: 2.4, repeat: Infinity, repeatDelay: 0.35, ease: "easeInOut" }}
+        className="absolute left-[-12%] top-[58%] h-px w-[124%] bg-gradient-to-r from-transparent via-sky-300/60 to-transparent"
+        animate={{ x: ["10%", "-14%"], opacity: [0, 0.65, 0] }}
+        transition={{ duration: 1.45, repeat: Infinity, repeatDelay: 0.08, ease: "easeInOut" }}
       />
 
       {[0, 1, 2, 3, 4, 5].map((index) => {
@@ -515,15 +538,15 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
         return (
           <motion.div
             key={`intro-particle-${index}`}
-            className="absolute h-2 w-2 rounded-full bg-white/70 shadow-[0_0_18px_rgba(255,255,255,0.45)]"
+            className="absolute h-2 w-2 rounded-full bg-white/80 shadow-[0_0_22px_rgba(255,255,255,0.6)]"
             style={offsets}
             animate={{
-              y: [0, -24, 8, 0],
-              opacity: [0.15, 0.95, 0.35, 0.15],
-              scale: [0.7, 1.2, 0.9, 0.7],
+              y: [0, -34, 12, 0],
+              opacity: [0.12, 1, 0.3, 0.12],
+              scale: [0.65, 1.28, 0.84, 0.65],
             }}
             transition={{
-              duration: 3.4 + index * 0.28,
+              duration: 2.6 + index * 0.22,
               repeat: Infinity,
               ease: "easeInOut",
               delay: index * 0.12,
@@ -559,26 +582,54 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
           className="relative flex w-full max-w-4xl flex-col items-center gap-7"
         >
           <motion.div
-            className="absolute h-36 w-36 rounded-full border border-white/15"
+            className="absolute h-40 w-40 rounded-full border border-white/15"
             animate={{ rotate: 360 }}
-            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 8.5, repeat: Infinity, ease: "linear" }}
           />
           <motion.div
-            className="absolute h-24 w-24 rounded-full border border-sky-200/20"
+            className="absolute h-28 w-28 rounded-full border border-sky-200/20"
             animate={{ rotate: -360 }}
-            transition={{ duration: 7.5, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 6.2, repeat: Infinity, ease: "linear" }}
+          />
+          <motion.div
+            className="absolute h-56 w-56 rounded-full"
+            style={{
+              background:
+                "conic-gradient(from 90deg, transparent 0deg, rgba(255,255,255,0.18) 48deg, transparent 92deg, transparent 220deg, rgba(56,189,248,0.22) 270deg, transparent 320deg)",
+              filter: "blur(2px)",
+            }}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 5.8, repeat: Infinity, ease: "linear" }}
           />
           <div className="relative z-10 text-center">
-            <ScriptLogo />
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.72, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <ScriptLogo />
+            </motion.div>
           </div>
           <motion.p
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.55 }}
-            className="max-w-2xl text-center text-sm tracking-[0.18em] text-white/60 uppercase sm:text-base"
+            transition={{ duration: 0.72, delay: 0.72 }}
+            className="max-w-2xl text-center text-sm tracking-[0.22em] text-white/60 uppercase sm:text-base"
           >
             Premium Physics II Experience
           </motion.p>
+          <motion.div
+            initial={{ opacity: 0, scaleX: 0.2 }}
+            animate={{ opacity: 1, scaleX: 1 }}
+            transition={{ duration: 1.8, delay: 0.95, ease: "easeOut" }}
+            className="relative mt-2 h-px w-56 origin-center overflow-hidden bg-white/12"
+          >
+            <motion.div
+              className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white to-transparent"
+              animate={{ x: ["-60%", "260%"] }}
+              transition={{ duration: 1.3, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </motion.div>
         </motion.div>
       </div>
 
@@ -586,12 +637,22 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.8 }}
+          transition={{ duration: 0.55, delay: 0.9 }}
           className="mx-auto max-w-4xl rounded-[2rem] border border-white/10 bg-black/20 px-5 py-5 backdrop-blur-md"
         >
-          <p className="text-center text-sm text-white/72 sm:text-base">
-            애니메이션이 끝나면 로그인 화면이 열립니다.
-          </p>
+          <div className="space-y-3">
+            <p className="text-center text-sm text-white/72 sm:text-base">
+              인트로가 4초간 재생된 뒤 로그인 화면이 열립니다.
+            </p>
+            <div className="h-1 overflow-hidden rounded-full bg-white/10">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-sky-300 via-white to-sky-300"
+                initial={{ width: "0%" }}
+                animate={{ width: "100%" }}
+                transition={{ duration: LOGIN_INTRO_DURATION_MS / 1000, ease: "linear" }}
+              />
+            </div>
+          </div>
         </motion.div>
       </div>
     </motion.div>
@@ -1687,12 +1748,12 @@ export default function PortalClient({
     applyProfile(data.profile as StudentProfile | undefined);
   };
 
-  const dismissLoginIntro = () => {
+  const dismissLoginIntro = useCallback(() => {
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem(LOGIN_INTRO_SESSION_KEY, "1");
     }
     setShowLoginIntro(false);
-  };
+  }, []);
 
   const handleLogout = async () => {
     await fetch("/api/logout", { method: "POST" });
