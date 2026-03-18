@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   BookOpen,
@@ -459,10 +459,24 @@ function ScriptLogo() {
 }
 
 function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
+  const prefersReducedMotion = useReducedMotion();
+  const [isCompactIntro, setIsCompactIntro] = useState(false);
+
   useEffect(() => {
     const timeout = window.setTimeout(onComplete, LOGIN_INTRO_DURATION_MS);
     return () => window.clearTimeout(timeout);
   }, [onComplete]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const updateCompactState = () => setIsCompactIntro(mediaQuery.matches);
+
+    updateCompactState();
+    mediaQuery.addEventListener("change", updateCompactState);
+    return () => mediaQuery.removeEventListener("change", updateCompactState);
+  }, []);
+
+  const useCompactMotion = prefersReducedMotion || isCompactIntro;
 
   return (
     <motion.div
@@ -473,59 +487,67 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
       transition={{ duration: 0.45, ease: "easeOut" }}
       className="fixed inset-0 z-[90] overflow-hidden bg-[#020407]"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,rgba(255,255,255,0.16),transparent_18%),radial-gradient(circle_at_50%_44%,rgba(56,189,248,0.18),transparent_28%),linear-gradient(180deg,rgba(10,14,20,0.24),rgba(3,5,8,0.94))]" />
-      <div className="absolute inset-0 bg-[linear-gradient(transparent_0%,rgba(255,255,255,0.03)_48%,transparent_100%)] bg-[length:100%_5px] opacity-20" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,rgba(255,255,255,0.16),transparent_18%),radial-gradient(circle_at_50%_44%,rgba(56,189,248,0.18),transparent_28%),linear-gradient(180deg,rgba(10,14,20,0.24),rgba(3,5,8,0.94))]" />
+      {!useCompactMotion && (
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_0%,rgba(255,255,255,0.03)_48%,transparent_100%)] bg-[length:100%_5px] opacity-20" />
+      )}
 
       <motion.div
-        className="absolute left-1/2 top-1/2 h-[50rem] w-[50rem] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-80"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[36rem] w-[36rem] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-80 sm:h-[50rem] sm:w-[50rem]"
         style={{
           background:
             "conic-gradient(from 0deg, rgba(255,255,255,0.02), rgba(255,255,255,0.14), rgba(56,189,248,0.08), rgba(255,255,255,0.02) 62%, rgba(255,255,255,0.12), rgba(255,255,255,0.02))",
-          filter: "blur(1px)",
+          filter: useCompactMotion ? "none" : "blur(1px)",
         }}
-        animate={{ rotate: 360, scale: [0.96, 1.01, 0.97] }}
+        animate={useCompactMotion ? { rotate: 180 } : { rotate: 360, scale: [0.96, 1.01, 0.97] }}
         transition={{
-          rotate: { duration: 14, repeat: Infinity, ease: "linear" },
-          scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+          rotate: { duration: useCompactMotion ? 4 : 14, repeat: useCompactMotion ? 0 : Infinity, ease: "linear" },
+          scale: { duration: 4, repeat: useCompactMotion ? 0 : Infinity, ease: "easeInOut" },
         }}
       />
       <motion.div
-        className="absolute left-1/2 top-1/2 h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8"
-        animate={{ rotate: -360, opacity: [0.18, 0.45, 0.18] }}
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[27rem] w-[27rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8 sm:h-[38rem] sm:w-[38rem]"
+        animate={useCompactMotion ? { opacity: [0.16, 0.34, 0.16] } : { rotate: -360, opacity: [0.18, 0.45, 0.18] }}
         transition={{
-          rotate: { duration: 11, repeat: Infinity, ease: "linear" },
-          opacity: { duration: 2.6, repeat: Infinity, ease: "easeInOut" },
+          rotate: { duration: 11, repeat: useCompactMotion ? 0 : Infinity, ease: "linear" },
+          opacity: { duration: 2.6, repeat: useCompactMotion ? 1 : Infinity, ease: "easeInOut" },
         }}
       />
       <motion.div
-        className="absolute left-1/2 top-1/2 h-[25rem] w-[25rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[18rem] w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-full sm:h-[25rem] sm:w-[25rem]"
         style={{
           background:
             "radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(56,189,248,0.12) 22%, rgba(56,189,248,0.04) 42%, transparent 70%)",
-          filter: "blur(6px)",
+          filter: useCompactMotion ? "blur(2px)" : "blur(6px)",
         }}
         animate={{ scale: [0.88, 1.08, 0.9], opacity: [0.24, 0.58, 0.28] }}
-        transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 2.8, repeat: useCompactMotion ? 1 : Infinity, ease: "easeInOut" }}
       />
 
-      <motion.div
-        className="absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-300/16"
-        animate={{ scale: [0.75, 1.04], opacity: [0.75, 0] }}
-        transition={{ duration: 1.3, repeat: Infinity, ease: "easeOut" }}
-      />
+      {!useCompactMotion && (
+        <motion.div
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-300/16"
+          animate={{ scale: [0.75, 1.04], opacity: [0.75, 0] }}
+          transition={{ duration: 1.3, repeat: Infinity, ease: "easeOut" }}
+        />
+      )}
 
-      <motion.div
-        className="absolute left-[-12%] top-[22%] h-px w-[124%] bg-gradient-to-r from-transparent via-white/75 to-transparent"
-        animate={{ x: ["-8%", "16%"], opacity: [0, 0.9, 0] }}
-        transition={{ duration: 1.15, repeat: Infinity, repeatDelay: 0.18, ease: "easeInOut" }}
-      />
-      <motion.div
-        className="absolute left-[-12%] top-[58%] h-px w-[124%] bg-gradient-to-r from-transparent via-sky-300/60 to-transparent"
-        animate={{ x: ["10%", "-14%"], opacity: [0, 0.65, 0] }}
-        transition={{ duration: 1.45, repeat: Infinity, repeatDelay: 0.08, ease: "easeInOut" }}
-      />
+      {!useCompactMotion && (
+        <>
+          <motion.div
+            className="pointer-events-none absolute left-[-12%] top-[22%] h-px w-[124%] bg-gradient-to-r from-transparent via-white/75 to-transparent"
+            animate={{ x: ["-8%", "16%"], opacity: [0, 0.9, 0] }}
+            transition={{ duration: 1.15, repeat: Infinity, repeatDelay: 0.18, ease: "easeInOut" }}
+          />
+          <motion.div
+            className="pointer-events-none absolute left-[-12%] top-[58%] h-px w-[124%] bg-gradient-to-r from-transparent via-sky-300/60 to-transparent"
+            animate={{ x: ["10%", "-14%"], opacity: [0, 0.65, 0] }}
+            transition={{ duration: 1.45, repeat: Infinity, repeatDelay: 0.08, ease: "easeInOut" }}
+          />
+        </>
+      )}
 
-      {[0, 1, 2, 3, 4, 5].map((index) => {
+      {[0, 1, 2, 3, ...(useCompactMotion ? [] : [4, 5])].map((index) => {
         const offsets = [
           { left: "18%", top: "28%" },
           { left: "30%", top: "68%" },
@@ -538,7 +560,7 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
         return (
           <motion.div
             key={`intro-particle-${index}`}
-            className="absolute h-2 w-2 rounded-full bg-white/80 shadow-[0_0_22px_rgba(255,255,255,0.6)]"
+            className="pointer-events-none absolute h-2 w-2 rounded-full bg-white/80 shadow-[0_0_18px_rgba(255,255,255,0.45)]"
             style={offsets}
             animate={{
               y: [0, -34, 12, 0],
@@ -546,8 +568,8 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
               scale: [0.65, 1.28, 0.84, 0.65],
             }}
             transition={{
-              duration: 2.6 + index * 0.22,
-              repeat: Infinity,
+              duration: 2.4 + index * 0.2,
+              repeat: useCompactMotion ? 1 : Infinity,
               ease: "easeInOut",
               delay: index * 0.12,
             }}
@@ -555,7 +577,7 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
         );
       })}
 
-      <div className="absolute inset-x-0 top-0 flex items-center justify-between px-5 py-5 sm:px-8">
+      <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-5 py-5 sm:px-8">
         <div className="space-y-2">
           <p className="text-[11px] uppercase tracking-[0.38em] text-white/55">
             Han&apos;s Physics Portal
@@ -567,40 +589,42 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
         <Button
           type="button"
           variant="secondary"
-          className="rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20"
+          className="pointer-events-auto rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20"
           onClick={onComplete}
         >
           건너뛰기
         </Button>
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center px-6">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
         <motion.div
           initial={{ opacity: 0, y: 24, scale: 0.92 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.9, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="relative flex w-full max-w-4xl flex-col items-center gap-7"
+          className="relative flex w-full max-w-4xl flex-col items-center gap-5 sm:gap-7"
         >
           <motion.div
-            className="absolute h-40 w-40 rounded-full border border-white/15"
+            className="absolute h-32 w-32 rounded-full border border-white/15 sm:h-40 sm:w-40"
             animate={{ rotate: 360 }}
-            transition={{ duration: 8.5, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 8.5, repeat: useCompactMotion ? 0 : Infinity, ease: "linear" }}
           />
           <motion.div
-            className="absolute h-28 w-28 rounded-full border border-sky-200/20"
+            className="absolute h-24 w-24 rounded-full border border-sky-200/20 sm:h-28 sm:w-28"
             animate={{ rotate: -360 }}
-            transition={{ duration: 6.2, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 6.2, repeat: useCompactMotion ? 0 : Infinity, ease: "linear" }}
           />
-          <motion.div
-            className="absolute h-56 w-56 rounded-full"
-            style={{
-              background:
-                "conic-gradient(from 90deg, transparent 0deg, rgba(255,255,255,0.18) 48deg, transparent 92deg, transparent 220deg, rgba(56,189,248,0.22) 270deg, transparent 320deg)",
-              filter: "blur(2px)",
-            }}
-            animate={{ rotate: 360 }}
-            transition={{ duration: 5.8, repeat: Infinity, ease: "linear" }}
-          />
+          {!useCompactMotion && (
+            <motion.div
+              className="absolute h-56 w-56 rounded-full"
+              style={{
+                background:
+                  "conic-gradient(from 90deg, transparent 0deg, rgba(255,255,255,0.18) 48deg, transparent 92deg, transparent 220deg, rgba(56,189,248,0.22) 270deg, transparent 320deg)",
+                filter: "blur(2px)",
+              }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 5.8, repeat: Infinity, ease: "linear" }}
+            />
+          )}
           <div className="relative z-10 text-center">
             <motion.div
               initial={{ opacity: 0, y: 24, scale: 0.9 }}
@@ -614,7 +638,7 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.72, delay: 0.72 }}
-            className="max-w-2xl text-center text-sm tracking-[0.22em] text-white/60 uppercase sm:text-base"
+            className="max-w-2xl text-center text-xs tracking-[0.22em] text-white/60 uppercase sm:text-base"
           >
             Premium Physics II Experience
           </motion.p>
@@ -633,7 +657,7 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
         </motion.div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 px-5 pb-8 sm:px-8 sm:pb-10">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 px-5 pb-8 sm:px-8 sm:pb-10">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
