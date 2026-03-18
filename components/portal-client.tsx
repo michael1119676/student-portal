@@ -638,20 +638,15 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, delay: 0.9 }}
-          className="mx-auto max-w-4xl rounded-[2rem] border border-white/10 bg-black/20 px-5 py-5 backdrop-blur-md"
+          className="mx-auto max-w-4xl"
         >
-          <div className="space-y-3">
-            <p className="text-center text-sm text-white/72 sm:text-base">
-              인트로가 4초간 재생된 뒤 로그인 화면이 열립니다.
-            </p>
-            <div className="h-1 overflow-hidden rounded-full bg-white/10">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-sky-300 via-white to-sky-300"
-                initial={{ width: "0%" }}
-                animate={{ width: "100%" }}
-                transition={{ duration: LOGIN_INTRO_DURATION_MS / 1000, ease: "linear" }}
-              />
-            </div>
+          <div className="h-1 overflow-hidden rounded-full bg-white/10">
+            <motion.div
+              className="h-full rounded-full bg-gradient-to-r from-sky-300 via-white to-sky-300"
+              initial={{ width: "0%" }}
+              animate={{ width: "100%" }}
+              transition={{ duration: LOGIN_INTRO_DURATION_MS / 1000, ease: "linear" }}
+            />
           </div>
         </motion.div>
       </div>
