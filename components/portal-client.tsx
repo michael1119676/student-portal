@@ -334,35 +334,35 @@ const universityProfiles = {
   },
   sogang: {
     label: "서강대학교",
-    image: "/logos/sogang.svg",
+    image: "/logos/sogang.png",
   },
   skku: {
     label: "성균관대학교",
-    image: "/logos/skku.svg",
+    image: "/logos/skku.jpeg",
   },
   medical: {
-    label: "의대",
-    image: "/logos/medical.svg",
+    label: "의과대학",
+    image: "/logos/medical.png",
   },
   oriental: {
     label: "한의대",
-    image: "/logos/oriental.svg",
+    image: "/logos/oriental.png",
   },
   veterinary: {
-    label: "수의대",
-    image: "/logos/veterinary.svg",
+    label: "수의학",
+    image: "/logos/veterinary.png",
   },
   pharmacy: {
-    label: "약대",
-    image: "/logos/pharmacy.svg",
+    label: "약학대학",
+    image: "/logos/pharmacy.png",
   },
   dental: {
-    label: "치대",
-    image: "/logos/dental.svg",
+    label: "치과대학",
+    image: "/logos/dental.png",
   },
-  public_health: {
-    label: "보건계열",
-    image: "/logos/public-health.svg",
+  hanyang: {
+    label: "한양대학교",
+    image: "/logos/hanyang.jpeg",
   },
 } as const;
 
