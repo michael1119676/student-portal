@@ -463,11 +463,13 @@ function IntroWriteLine({
   delay,
   className,
   cursorClassName,
+  textStyle,
 }: {
   text: string;
   delay: number;
   className: string;
   cursorClassName?: string;
+  textStyle?: React.CSSProperties;
 }) {
   return (
     <div className="relative inline-flex max-w-full overflow-hidden whitespace-nowrap">
@@ -477,7 +479,9 @@ function IntroWriteLine({
         transition={{ duration: 1.05, delay, ease: [0.22, 1, 0.36, 1] }}
         className="overflow-hidden"
       >
-        <span className={className}>{text}</span>
+        <span className={className} style={textStyle}>
+          {text}
+        </span>
       </motion.div>
       <motion.span
         initial={{ opacity: 0, x: 0 }}
@@ -667,8 +671,13 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
               <IntroWriteLine
                 text="HAN'S PHYSICS"
                 delay={0.38}
-                className='relative text-5xl tracking-[0.08em] text-white drop-shadow-[0_10px_35px_rgba(255,255,255,0.18)] sm:text-7xl'
+                className="relative text-5xl tracking-[0.03em] text-white italic drop-shadow-[0_10px_35px_rgba(255,255,255,0.18)] sm:text-7xl"
                 cursorClassName="bg-sky-100/95"
+                textStyle={{
+                  fontFamily:
+                    '"Snell Roundhand", "Apple Chancery", "Brush Script MT", "Segoe Script", cursive',
+                  fontWeight: 500,
+                }}
               />
             </motion.div>
             <motion.div
@@ -679,8 +688,13 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
               <IntroWriteLine
                 text="PREMIUM PHYSICS II SERVICE"
                 delay={1.08}
-                className="text-sm tracking-[0.32em] text-white/68 sm:text-lg"
+                className="text-sm tracking-[0.18em] text-white/68 italic sm:text-lg"
                 cursorClassName="bg-white/90"
+                textStyle={{
+                  fontFamily:
+                    '"Palatino Linotype", "Book Antiqua", "Times New Roman", serif',
+                  fontWeight: 500,
+                }}
               />
             </motion.div>
           </div>
