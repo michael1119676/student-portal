@@ -536,6 +536,18 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   }, [bgmBlocked, bgmEnabled, playShopBgm]);
 
   useEffect(() => {
+    const audio = bgmAudioRef.current;
+    if (!audio || !bgmEnabled) return;
+
+    if (drawCinematic?.phase === "opening") {
+      audio.pause();
+      return;
+    }
+
+    void playShopBgm();
+  }, [bgmEnabled, drawCinematic?.phase, playShopBgm]);
+
+  useEffect(() => {
     const timer = window.setInterval(async () => {
       try {
         const res = await fetch(`/api/shop/feed?limit=25&rareOnly=1&afterId=${lastFeedIdRef.current}`, {
@@ -1117,6 +1129,11 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                 if (!nextEnabled) {
                   audio.pause();
                   audio.currentTime = 0;
+                  setBgmBlocked(false);
+                  return;
+                }
+
+                if (drawCinematic?.phase === "opening") {
                   setBgmBlocked(false);
                   return;
                 }
