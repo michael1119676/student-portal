@@ -7,7 +7,7 @@ import {
   PREMIUM_MONTH_ROUNDS,
 } from "@/lib/season-premium";
 
-const seasonMeta = getPremiumSeasonMeta("DP");
+const seasonMeta = getPremiumSeasonMeta("SP");
 
 export async function GET(request: Request) {
   const user = await getSessionUserFromCookies();
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
   const { data: records, error: recordError } = await supabase
     .from("exam_score_records")
     .select("student_id, round, score")
-    .eq("season", "DP")
+    .eq("season", "SP")
     .in("round", [...PREMIUM_MONTH_ROUNDS]);
 
   if (recordError) {
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    season: "DP",
+    season: "SP",
     maxRound: PREMIUM_MONTH_ROUNDS.length,
     yMax: 50,
     binSize: 5,

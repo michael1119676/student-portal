@@ -28,7 +28,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PREMIUM_MONTH_ROUNDS, getPremiumRoundLabel } from "@/lib/season-premium";
+import {
+  getPremiumRoundLabel,
+  getPremiumSeasonMeta,
+  isPremiumSeason,
+  PREMIUM_MONTH_ROUNDS,
+  type PremiumSeasonCode,
+} from "@/lib/season-premium";
 
 export type SessionUser = {
   id: string;
@@ -190,7 +196,7 @@ type PremiumRoundDetail = {
 
 type PremiumSeasonResponse = {
   ok: boolean;
-  season: "DP";
+  season: PremiumSeasonCode;
   maxRound: number;
   yMax: number;
   binSize: number;
@@ -255,7 +261,7 @@ type AdminStatsResponse = {
   ok: boolean;
   message?: string;
   stats?: {
-    season: "C" | "N" | "DP";
+    season: "C" | "N" | PremiumSeasonCode;
     round: number;
     roundLabel?: string;
     participantCount: number;
@@ -301,9 +307,11 @@ const seasons = [
   { id: "M", badge: "M", title: "M 시즌", subtitle: "M 시즌 성적 확인" },
   {
     id: "DP",
-    badge: "더프",
-    title: "더프리미엄 모의고사",
-    subtitle: "월별 더프 물리학 II 통계 확인",
+    ...getPremiumSeasonMeta("DP"),
+  },
+  {
+    id: "SP",
+    ...getPremiumSeasonMeta("SP"),
   },
 ];
 
@@ -377,6 +385,19 @@ function normalizeClassNameLabel(className: string | null | undefined) {
   const normalized = className.trim();
   if (normalized === "녹화강의반") return "영상반";
   return normalized;
+}
+
+function formatSeasonRoundLabel(
+  season: string,
+  round: number,
+  options?: { longPremium?: boolean }
+) {
+  if (isPremiumSeason(season)) {
+    const meta = getPremiumSeasonMeta(season);
+    return `${options?.longPremium ? meta.title : meta.shortTitle} ${getPremiumRoundLabel(round)}`;
+  }
+
+  return `${season} 시즌 ${round}회`;
 }
 
 function classStatOrder(className: string | null | undefined) {
@@ -549,14 +570,14 @@ export default function PortalClient({
   const [premiumData, setPremiumData] = useState<PremiumSeasonResponse["data"] | null>(null);
   const [premiumLoading, setPremiumLoading] = useState(false);
   const [premiumError, setPremiumError] = useState("");
-  const [premiumLoadedForId, setPremiumLoadedForId] = useState<string | null>(null);
+  const [premiumLoadedForKey, setPremiumLoadedForKey] = useState<string | null>(null);
   const [selectedPremiumRound, setSelectedPremiumRound] = useState<number | null>(null);
   const [adminCutSeason, setAdminCutSeason] = useState<"N" | "M" | null>(null);
   const [adminNInputRound, setAdminNInputRound] = useState(1);
   const [nCutInputs, setNCutInputs] = useState({ cut1: "", cut2: "", cut3: "" });
   const [nCutSaveMessage, setNCutSaveMessage] = useState("");
   const [nCutLoading, setNCutLoading] = useState(false);
-  const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N" | "DP">("C");
+  const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N" | PremiumSeasonCode>("C");
   const [statsRound, setStatsRound] = useState(1);
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
   const [adminStatsLoading, setAdminStatsLoading] = useState(false);
@@ -585,11 +606,19 @@ export default function PortalClient({
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
   const canShowStudentPortal = isAdminMode ? !!sessionUser && !!selectedStudent : isLoggedIn;
   const profile = universityProfiles[targetUniversity];
+  const selectedPremiumSeason = isPremiumSeason(selectedSeason) ? selectedSeason : null;
+  const currentPremiumDataKey =
+    selectedPremiumSeason && visibleUser?.id ? `${selectedPremiumSeason}:${visibleUser.id}` : null;
+  const activePremiumData =
+    currentPremiumDataKey && premiumLoadedForKey === currentPremiumDataKey ? premiumData : null;
+  const selectedPremiumMeta = selectedPremiumSeason
+    ? getPremiumSeasonMeta(selectedPremiumSeason)
+    : null;
   const statsRoundOptions = useMemo(
     () =>
       statsSeason === "N"
         ? Array.from({ length: 12 }, (_, i) => i + 1)
-        : statsSeason === "DP"
+        : isPremiumSeason(statsSeason)
           ? [...PREMIUM_MONTH_ROUNDS]
           : Array.from({ length: 10 }, (_, i) => i + 1),
     [statsSeason]
@@ -654,9 +683,9 @@ export default function PortalClient({
   );
 
   const selectedPremiumRoundDetail = useMemo(() => {
-    if (!premiumData || selectedPremiumRound === null) return null;
-    return premiumData.details.find((detail) => detail.round === selectedPremiumRound) ?? null;
-  }, [premiumData, selectedPremiumRound]);
+    if (!activePremiumData || selectedPremiumRound === null) return null;
+    return activePremiumData.details.find((detail) => detail.round === selectedPremiumRound) ?? null;
+  }, [activePremiumData, selectedPremiumRound]);
 
   const nPlotPoints = useMemo(() => {
     if (!seasonNData || seasonNData.rounds.length === 0) return [];
@@ -673,8 +702,8 @@ export default function PortalClient({
   const nSmoothLinePath = useMemo(() => buildSmoothPath(nPlotPoints), [nPlotPoints]);
 
   const premiumPlotPoints = useMemo(() => {
-    if (!premiumData || premiumData.rounds.length === 0) return [];
-    return premiumData.rounds
+    if (!activePremiumData || activePremiumData.rounds.length === 0) return [];
+    return activePremiumData.rounds
       .map((round, index, arr) => {
         if (round.myScore === null) return null;
         const x = ((index + 0.5) / arr.length) * 100;
@@ -682,7 +711,7 @@ export default function PortalClient({
         return { x, y };
       })
       .filter((point): point is { x: number; y: number } => point !== null);
-  }, [premiumData]);
+  }, [activePremiumData]);
 
   const premiumSmoothLinePath = useMemo(
     () => buildSmoothPath(premiumPlotPoints),
@@ -702,13 +731,14 @@ export default function PortalClient({
     if (selectedSeason === "N" && selectedNRoundDetail) {
       return { season: "N", round: selectedNRoundDetail.round };
     }
-    if (selectedSeason === "DP" && selectedPremiumRoundDetail) {
-      return { season: "DP", round: selectedPremiumRoundDetail.round };
+    if (selectedPremiumSeason && selectedPremiumRoundDetail) {
+      return { season: selectedPremiumSeason, round: selectedPremiumRoundDetail.round };
     }
     return null;
   }, [
     visibleUser?.id,
     selectedSeason,
+    selectedPremiumSeason,
     selectedRoundDetail,
     selectedNRoundDetail,
     selectedPremiumRoundDetail,
@@ -957,20 +987,24 @@ export default function PortalClient({
   }, [selectedSeason, canShowStudentPortal, visibleUser?.id, isAdminMode, seasonNData, seasonNLoadedForId, selectedNRound]);
 
   useEffect(() => {
-    if (selectedSeason !== "DP") return;
-    if (!canShowStudentPortal || !visibleUser?.id) return;
-    if (premiumData && premiumLoadedForId === visibleUser.id) {
+    if (!selectedPremiumSeason) return;
+    if (!canShowStudentPortal || !visibleUser?.id || !currentPremiumDataKey) return;
+    if (activePremiumData) {
       setPremiumLoading(false);
       setPremiumError("");
       if (selectedPremiumRound === null) {
         const defaultRound =
-          premiumData.rounds.find((round) => round.myScore !== null)?.round ?? PREMIUM_MONTH_ROUNDS[0];
+          activePremiumData.rounds.find((round) => round.myScore !== null)?.round ??
+          PREMIUM_MONTH_ROUNDS[0];
         setSelectedPremiumRound(defaultRound);
       }
       return;
     }
 
     let cancelled = false;
+    const apiPath =
+      selectedPremiumSeason === "SP" ? "/api/season/survival-premium" : "/api/season/premium";
+    const premiumMeta = getPremiumSeasonMeta(selectedPremiumSeason);
 
     const loadPremium = async () => {
       setPremiumLoading(true);
@@ -979,12 +1013,12 @@ export default function PortalClient({
       const query = isAdminMode ? `?studentId=${encodeURIComponent(visibleUser.id)}` : "";
 
       try {
-        const res = await fetch(`/api/season/premium${query}`, { cache: "no-store" });
+        const res = await fetch(`${apiPath}${query}`, { cache: "no-store" });
         const data = (await res.json()) as PremiumSeasonResponse;
 
         if (!res.ok || !data.ok) {
           if (!cancelled) {
-            setPremiumError(data.message || "더프리미엄 모의고사 데이터를 불러오지 못했습니다.");
+            setPremiumError(data.message || `${premiumMeta.title} 데이터를 불러오지 못했습니다.`);
             setPremiumData(null);
             setSelectedPremiumRound(null);
           }
@@ -993,16 +1027,16 @@ export default function PortalClient({
 
         if (!cancelled) {
           setPremiumData(data.data);
-          setPremiumLoadedForId(visibleUser.id);
+          setPremiumLoadedForKey(currentPremiumDataKey);
           const defaultRound =
             data.data.rounds.find((round) => round.myScore !== null)?.round ?? PREMIUM_MONTH_ROUNDS[0];
           setSelectedPremiumRound(defaultRound);
         }
       } catch {
         if (!cancelled) {
-          setPremiumError("더프리미엄 모의고사 데이터를 불러오지 못했습니다.");
+          setPremiumError(`${premiumMeta.title} 데이터를 불러오지 못했습니다.`);
           setPremiumData(null);
-          setPremiumLoadedForId(null);
+          setPremiumLoadedForKey(null);
           setSelectedPremiumRound(null);
         }
       } finally {
@@ -1018,12 +1052,12 @@ export default function PortalClient({
       cancelled = true;
     };
   }, [
-    selectedSeason,
+    selectedPremiumSeason,
     canShowStudentPortal,
     visibleUser?.id,
     isAdminMode,
-    premiumData,
-    premiumLoadedForId,
+    currentPremiumDataKey,
+    activePremiumData,
     selectedPremiumRound,
   ]);
 
@@ -1408,7 +1442,7 @@ export default function PortalClient({
     const html = `
       <html>
         <head>
-          <title>${adminStats.season === "DP" ? `더프리미엄 모의고사 ${adminStats.roundLabel ?? `${adminStats.round}월`}` : `${adminStats.season} 시즌 ${adminStats.round}회 통계`}</title>
+          <title>${isPremiumSeason(adminStats.season) ? `${getPremiumSeasonMeta(adminStats.season).title} ${adminStats.roundLabel ?? `${adminStats.round}월`}` : `${adminStats.season} 시즌 ${adminStats.round}회 통계`}</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 28px; color: #111; }
             h1 { margin: 0 0 8px; font-size: 26px; }
@@ -1424,7 +1458,7 @@ export default function PortalClient({
           </style>
         </head>
         <body>
-          <h1>${adminStats.season === "DP" ? `더프리미엄 모의고사 ${adminStats.roundLabel ?? `${adminStats.round}월`}` : `${adminStats.season} 시즌 ${adminStats.round}회 통계`}</h1>
+          <h1>${isPremiumSeason(adminStats.season) ? `${getPremiumSeasonMeta(adminStats.season).title} ${adminStats.roundLabel ?? `${adminStats.round}월`}` : `${adminStats.season} 시즌 ${adminStats.round}회 통계`}</h1>
           <p>전체 통계 및 반별 통계 리포트</p>
           <div class="cards">
             <div class="card"><div class="label">응시 인원</div><div class="value">${adminStats.participantCount}</div></div>
@@ -2489,9 +2523,7 @@ export default function PortalClient({
                                           </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                          {item.season === "DP"
-                                            ? `더프 ${getPremiumRoundLabel(item.round)}`
-                                            : `${item.season} 시즌 ${item.round}회`}
+                                          {formatSeasonRoundLabel(item.season, item.round)}
                                         </td>
                                         <td className="px-4 py-3">
                                           <span
@@ -2542,9 +2574,11 @@ export default function PortalClient({
                                         : ""}
                                     </p>
                                     <p className="mt-2 text-sm text-white/70">
-                                      {selectedAdminNote.season === "DP"
-                                        ? `더프리미엄 모의고사 ${getPremiumRoundLabel(selectedAdminNote.round)}`
-                                        : `${selectedAdminNote.season} 시즌 ${selectedAdminNote.round}회`}
+                                      {formatSeasonRoundLabel(
+                                        selectedAdminNote.season,
+                                        selectedAdminNote.round,
+                                        { longPremium: true }
+                                      )}
                                     </p>
                                   </div>
 
@@ -2604,14 +2638,15 @@ export default function PortalClient({
                             <select
                               value={statsSeason}
                               onChange={(e) =>
-                                setStatsSeason(e.target.value as "C" | "M" | "N" | "DP")
+                                setStatsSeason(e.target.value as "C" | "M" | "N" | PremiumSeasonCode)
                               }
                               className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
                             >
                               <option value="C">C 시즌</option>
                               <option value="N">N 시즌</option>
-                              <option value="DP">더프리미엄 모의고사</option>
                               <option value="M">M 시즌</option>
+                              <option value="DP">{getPremiumSeasonMeta("DP").title}</option>
+                              <option value="SP">{getPremiumSeasonMeta("SP").title}</option>
                             </select>
                           </div>
                           <div className="space-y-2">
@@ -2623,7 +2658,7 @@ export default function PortalClient({
                             >
                               {statsRoundOptions.map((round) => (
                                 <option key={round} value={round}>
-                                  {statsSeason === "DP" ? getPremiumRoundLabel(round) : `${round}회`}
+                                  {isPremiumSeason(statsSeason) ? getPremiumRoundLabel(round) : `${round}회`}
                                 </option>
                               ))}
                             </select>
@@ -2713,13 +2748,13 @@ export default function PortalClient({
 
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                                 <div className="border-b border-white/10 px-4 py-3 text-sm text-white/55">
-                                  {adminStats.season === "DP"
+                                  {isPremiumSeason(adminStats.season)
                                     ? "문항별 통계"
                                     : "약점 문항 (정답률 낮은 순)"}
                                 </div>
-                                {adminStats.season === "DP" ? (
+                                {isPremiumSeason(adminStats.season) ? (
                                   <div className="px-4 py-8 text-center text-sm text-white/60">
-                                    더프리미엄 모의고사는 문항별 통계를 제공하지 않습니다.
+                                    {getPremiumSeasonMeta(adminStats.season).title}는 문항별 통계를 제공하지 않습니다.
                                   </div>
                                 ) : (
                                   <div className="overflow-x-auto">
@@ -3118,7 +3153,7 @@ export default function PortalClient({
                       <p className="text-base text-white/55 sm:text-lg">
                         {isAdminMode
                           ? "관리자 로그인 상태로 학생 화면과 동일하게 확인할 수 있습니다."
-                          : "C 시즌 / N 시즌 / M 시즌 / 더프리미엄 모의고사 중 원하는 항목을 눌러 성적 화면으로 이동할 수 있습니다."}
+                          : "C 시즌 / N 시즌 / M 시즌 / 더프리미엄 모의고사 / 서바이벌 프리미엄 중 원하는 항목을 눌러 성적 화면으로 이동할 수 있습니다."}
                       </p>
                     </div>
 
@@ -4016,7 +4051,7 @@ export default function PortalClient({
                         </Button>
                       </div>
                     </div>
-                  ) : selectedSeason === "DP" ? (
+                  ) : selectedPremiumSeason ? (
                     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
                       <div className="self-start">
                         <Button
@@ -4029,21 +4064,21 @@ export default function PortalClient({
                       </div>
                       <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                         <CardHeader>
-                          <CardTitle className="text-3xl">더프리미엄 모의고사</CardTitle>
+                          <CardTitle className="text-3xl">{selectedPremiumMeta?.title}</CardTitle>
                           <CardDescription className="text-white/55">
-                            3월, 4월, 5월, 7월, 8월, 9월, 10월, 11월 더프 물리학 II 통계를 확인할 수 있습니다.
+                            3월, 4월, 5월, 7월, 8월, 9월, 10월, 11월 {selectedPremiumMeta?.shortTitle} 물리학 II 통계를 확인할 수 있습니다.
                           </CardDescription>
                         </CardHeader>
                         <CardContent>
                           {premiumLoading ? (
                             <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
-                              더프리미엄 모의고사 데이터를 불러오는 중...
+                              {selectedPremiumMeta?.title} 데이터를 불러오는 중...
                             </div>
                           ) : premiumError ? (
                             <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-6 text-red-200">
                               {premiumError}
                             </div>
-                          ) : premiumData ? (
+                          ) : activePremiumData ? (
                             <div className="space-y-6">
                               <div className="relative overflow-x-auto">
                                 <div className="relative h-[390px] min-w-[760px] rounded-[1.5rem] border border-white/10 bg-black/20 px-6 py-6">
@@ -4104,7 +4139,7 @@ export default function PortalClient({
                                   )}
 
                                   <div className="absolute left-12 right-6 top-6 bottom-14 grid grid-cols-8 gap-2">
-                                    {premiumData.rounds.map((round) => {
+                                    {activePremiumData.rounds.map((round) => {
                                       const averageHeight = `${round.averageScore * 2}%`;
                                       const isSelected = selectedPremiumRound === round.round;
                                       return (
@@ -4128,7 +4163,7 @@ export default function PortalClient({
                                   </div>
 
                                   <div className="absolute left-12 right-6 bottom-4 grid grid-cols-8 gap-2">
-                                    {premiumData.rounds.map((round) => (
+                                    {activePremiumData.rounds.map((round) => (
                                       <button
                                         key={`premium-label-${round.round}`}
                                         type="button"
@@ -4151,15 +4186,15 @@ export default function PortalClient({
                                 </div>
                               </div>
 
-                              {!premiumData.rounds.some((round) => round.myScore !== null) && (
+                              {!activePremiumData.rounds.some((round) => round.myScore !== null) && (
                                 <p className="text-sm text-amber-200/90">
-                                  등록된 더프리미엄 모의고사 점수가 없어 빨간 점은 표시되지 않습니다.
+                                  등록된 {selectedPremiumMeta?.title} 점수가 없어 빨간 점은 표시되지 않습니다.
                                 </p>
                               )}
                             </div>
                           ) : (
                             <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
-                              더프리미엄 모의고사 데이터가 없습니다.
+                              {selectedPremiumMeta?.title} 데이터가 없습니다.
                             </div>
                           )}
                         </CardContent>
@@ -4169,7 +4204,7 @@ export default function PortalClient({
                         <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                           <CardHeader>
                             <CardTitle className="text-2xl">
-                              더프리미엄 모의고사 {selectedPremiumRoundDetail.label} 상세 통계
+                              {selectedPremiumMeta?.title} {selectedPremiumRoundDetail.label} 상세 통계
                             </CardTitle>
                             <CardDescription className="text-white/55">
                               원점수와 반별 통계만 확인할 수 있습니다.
@@ -4233,7 +4268,9 @@ export default function PortalClient({
                       )}
 
                       {selectedPremiumRoundDetail &&
-                        renderSeasonNoteCard(`더프리미엄 모의고사 ${selectedPremiumRoundDetail.label} 셀프 피드백`)}
+                        renderSeasonNoteCard(
+                          `${selectedPremiumMeta?.title} ${selectedPremiumRoundDetail.label} 셀프 피드백`
+                        )}
 
                       <div className="flex flex-wrap gap-3">
                         <Button

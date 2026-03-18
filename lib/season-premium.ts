@@ -2,6 +2,23 @@ export const PREMIUM_MONTH_ROUNDS = [3, 4, 5, 7, 8, 9, 10, 11] as const;
 
 type PremiumMonthRound = (typeof PREMIUM_MONTH_ROUNDS)[number];
 
+export const PREMIUM_SEASON_META = {
+  DP: {
+    badge: "더프",
+    shortTitle: "더프",
+    title: "더프리미엄 모의고사",
+    subtitle: "월별 더프 물리학 II 통계 확인",
+  },
+  SP: {
+    badge: "서프",
+    shortTitle: "서프",
+    title: "서바이벌 프리미엄",
+    subtitle: "월별 서프 물리학 II 통계 확인",
+  },
+} as const;
+
+export type PremiumSeasonCode = keyof typeof PREMIUM_SEASON_META;
+
 type StudentRef = {
   id: string;
   name: string;
@@ -43,7 +60,7 @@ export type PremiumViewData = {
 };
 
 export type PremiumAdminStats = {
-  season: "DP";
+  season: PremiumSeasonCode;
   round: number;
   roundLabel: string;
   participantCount: number;
@@ -166,6 +183,14 @@ export function getPremiumRoundLabel(round: number) {
   return `${round}월`;
 }
 
+export function isPremiumSeason(value: unknown): value is PremiumSeasonCode {
+  return value === "DP" || value === "SP";
+}
+
+export function getPremiumSeasonMeta(season: PremiumSeasonCode) {
+  return PREMIUM_SEASON_META[season];
+}
+
 function normalizePremiumRound(round: number): PremiumMonthRound {
   return PREMIUM_MONTH_ROUNDS.includes(round as PremiumMonthRound)
     ? (round as PremiumMonthRound)
@@ -213,7 +238,8 @@ export function buildPremiumViewData(
 export function buildPremiumAdminStats(
   students: StudentRef[],
   records: ScoreRecord[],
-  round: number
+  round: number,
+  season: PremiumSeasonCode
 ): PremiumAdminStats {
   const safeRound = normalizePremiumRound(Math.round(round));
   const rows = buildRoundRows(students, records, safeRound);
@@ -222,7 +248,7 @@ export function buildPremiumAdminStats(
     .filter((value): value is number => value !== null);
 
   return {
-    season: "DP",
+    season,
     round: safeRound,
     roundLabel: getPremiumRoundLabel(safeRound),
     participantCount: validScores.length,
