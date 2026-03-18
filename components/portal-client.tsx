@@ -377,6 +377,7 @@ const quickLinks = [
 ];
 
 const LOGIN_INTRO_SESSION_KEY = "portal-login-intro-seen";
+const LOGIN_INTRO_DURATION_MS = 4300;
 
 function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
@@ -454,6 +455,146 @@ function ScriptLogo() {
         Han&apos;s Physics
       </h1>
     </div>
+  );
+}
+
+function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    const timeout = window.setTimeout(onComplete, LOGIN_INTRO_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [onComplete]);
+
+  return (
+    <motion.div
+      key="login-intro"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.45, ease: "easeOut" }}
+      className="fixed inset-0 z-[90] overflow-hidden bg-[#020407]"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.14),transparent_20%),radial-gradient(circle_at_50%_45%,rgba(56,189,248,0.16),transparent_32%),linear-gradient(180deg,rgba(5,8,13,0.4),rgba(2,3,6,0.94))]" />
+
+      <motion.div
+        className="absolute left-1/2 top-1/2 h-[46rem] w-[46rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8"
+        animate={{ rotate: 360, scale: [0.96, 1.02, 0.98] }}
+        transition={{ rotate: { duration: 18, repeat: Infinity, ease: "linear" }, scale: { duration: 5.5, repeat: Infinity, ease: "easeInOut" } }}
+      />
+      <motion.div
+        className="absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-300/16"
+        animate={{ rotate: -360, opacity: [0.22, 0.48, 0.22] }}
+        transition={{ rotate: { duration: 14, repeat: Infinity, ease: "linear" }, opacity: { duration: 4.2, repeat: Infinity, ease: "easeInOut" } }}
+      />
+      <motion.div
+        className="absolute left-1/2 top-1/2 h-[22rem] w-[22rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-300/10 blur-3xl"
+        animate={{ scale: [0.88, 1.06, 0.92], opacity: [0.28, 0.58, 0.34] }}
+        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      <motion.div
+        className="absolute left-[-20%] top-[22%] h-px w-[140%] bg-gradient-to-r from-transparent via-white/55 to-transparent"
+        animate={{ x: ["-8%", "10%"], opacity: [0, 0.75, 0] }}
+        transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 0.55, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute left-[-15%] top-[58%] h-px w-[130%] bg-gradient-to-r from-transparent via-sky-300/45 to-transparent"
+        animate={{ x: ["8%", "-10%"], opacity: [0, 0.55, 0] }}
+        transition={{ duration: 2.4, repeat: Infinity, repeatDelay: 0.35, ease: "easeInOut" }}
+      />
+
+      {[0, 1, 2, 3, 4, 5].map((index) => {
+        const offsets = [
+          { left: "18%", top: "28%" },
+          { left: "30%", top: "68%" },
+          { left: "46%", top: "18%" },
+          { left: "62%", top: "72%" },
+          { left: "76%", top: "34%" },
+          { left: "84%", top: "54%" },
+        ][index];
+
+        return (
+          <motion.div
+            key={`intro-particle-${index}`}
+            className="absolute h-2 w-2 rounded-full bg-white/70 shadow-[0_0_18px_rgba(255,255,255,0.45)]"
+            style={offsets}
+            animate={{
+              y: [0, -24, 8, 0],
+              opacity: [0.15, 0.95, 0.35, 0.15],
+              scale: [0.7, 1.2, 0.9, 0.7],
+            }}
+            transition={{
+              duration: 3.4 + index * 0.28,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: index * 0.12,
+            }}
+          />
+        );
+      })}
+
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between px-5 py-5 sm:px-8">
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-[0.38em] text-white/55">
+            Han&apos;s Physics Portal
+          </p>
+          <p className="text-sm text-white/75 sm:text-base">
+            실력이 만드는 결과의 차이
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          className="rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20"
+          onClick={onComplete}
+        >
+          건너뛰기
+        </Button>
+      </div>
+
+      <div className="absolute inset-0 flex items-center justify-center px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 24, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.9, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          className="relative flex w-full max-w-4xl flex-col items-center gap-7"
+        >
+          <motion.div
+            className="absolute h-36 w-36 rounded-full border border-white/15"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+          />
+          <motion.div
+            className="absolute h-24 w-24 rounded-full border border-sky-200/20"
+            animate={{ rotate: -360 }}
+            transition={{ duration: 7.5, repeat: Infinity, ease: "linear" }}
+          />
+          <div className="relative z-10 text-center">
+            <ScriptLogo />
+          </div>
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.55 }}
+            className="max-w-2xl text-center text-sm tracking-[0.18em] text-white/60 uppercase sm:text-base"
+          >
+            Premium Physics II Experience
+          </motion.p>
+        </motion.div>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 px-5 pb-8 sm:px-8 sm:pb-10">
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.8 }}
+          className="mx-auto max-w-4xl rounded-[2rem] border border-white/10 bg-black/20 px-5 py-5 backdrop-blur-md"
+        >
+          <p className="text-center text-sm text-white/72 sm:text-base">
+            애니메이션이 끝나면 로그인 화면이 열립니다.
+          </p>
+        </motion.div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -1870,56 +2011,7 @@ export default function PortalClient({
       <div className="relative overflow-hidden">
         <AnimatePresence>
           {!isLoggedIn && showLoginIntro && (
-            <motion.div
-              key="login-intro"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.45, ease: "easeOut" }}
-              className="fixed inset-0 z-[90] overflow-hidden bg-black"
-            >
-              <video
-                className="h-full w-full object-cover"
-                src="/intro-login.mp4"
-                autoPlay
-                muted
-                playsInline
-                preload="auto"
-                onEnded={dismissLoginIntro}
-                onError={dismissLoginIntro}
-              />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/70 via-black/15 to-black/80" />
-              <div className="absolute inset-x-0 top-0 flex items-center justify-between px-5 py-5 sm:px-8">
-                <div className="space-y-2">
-                  <p className="text-[11px] uppercase tracking-[0.38em] text-white/55">
-                    Han&apos;s Physics Portal
-                  </p>
-                  <p className="text-sm text-white/75 sm:text-base">
-                    실력이 만드는 결과의 차이
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20"
-                  onClick={dismissLoginIntro}
-                >
-                  건너뛰기
-                </Button>
-              </div>
-              <div className="absolute inset-x-0 bottom-0 px-5 pb-8 sm:px-8 sm:pb-10">
-                <motion.div
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                  className="mx-auto max-w-4xl rounded-[2rem] border border-white/10 bg-black/20 px-5 py-5 backdrop-blur-md"
-                >
-                  <p className="text-center text-sm text-white/72 sm:text-base">
-                    인트로가 끝나면 로그인 화면이 열립니다.
-                  </p>
-                </motion.div>
-              </div>
-            </motion.div>
+            <AnimatedLoginIntro onComplete={dismissLoginIntro} />
           )}
         </AnimatePresence>
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.15),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_20%)]" />
