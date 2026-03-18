@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Gift, RefreshCw, Shield, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Gift, RefreshCw, Shield, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -279,6 +279,9 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [probabilityLoading, setProbabilityLoading] = useState(false);
   const [probabilityBoxes, setProbabilityBoxes] = useState<ProbabilityBox[]>([]);
   const [deliveryUpdatingId, setDeliveryUpdatingId] = useState<number | null>(null);
+  const [bgmEnabled, setBgmEnabled] = useState(true);
+  const [bgmBlocked, setBgmBlocked] = useState(false);
+  const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
   const isAdmin = initialUser.role === "admin";
 
   const filteredStudents = useMemo(() => {
@@ -317,6 +320,23 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
     return map;
   }, [boxes]);
+
+  const playShopBgm = useCallback(async () => {
+    const audio = bgmAudioRef.current;
+    if (!audio || !bgmEnabled) return false;
+
+    audio.loop = true;
+    audio.volume = 0.32;
+
+    try {
+      await audio.play();
+      setBgmBlocked(false);
+      return true;
+    } catch {
+      setBgmBlocked(true);
+      return false;
+    }
+  }, [bgmEnabled]);
 
   const tickerText = useMemo(() => {
     if (feed.length === 0) return "아직 희귀 당첨 기록이 없습니다.";
@@ -469,6 +489,53 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   }, [isAdmin, fetchAdminStudents, fetchInventory, fetchWeeklyWinners]);
 
   useEffect(() => {
+    try {
+      const savedPreference = window.localStorage.getItem("shop-bgm-enabled");
+      if (savedPreference === "0") {
+        setBgmEnabled(false);
+      }
+    } catch {
+      //
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("shop-bgm-enabled", bgmEnabled ? "1" : "0");
+    } catch {
+      //
+    }
+
+    const audio = bgmAudioRef.current;
+    if (!audio) return;
+
+    if (!bgmEnabled) {
+      audio.pause();
+      audio.currentTime = 0;
+      setBgmBlocked(false);
+      return;
+    }
+
+    void playShopBgm();
+  }, [bgmEnabled, playShopBgm]);
+
+  useEffect(() => {
+    if (!bgmEnabled || !bgmBlocked) return;
+
+    const resumePlayback = () => {
+      void playShopBgm();
+    };
+
+    window.addEventListener("pointerdown", resumePlayback);
+    window.addEventListener("keydown", resumePlayback);
+
+    return () => {
+      window.removeEventListener("pointerdown", resumePlayback);
+      window.removeEventListener("keydown", resumePlayback);
+    };
+  }, [bgmBlocked, bgmEnabled, playShopBgm]);
+
+  useEffect(() => {
     const timer = window.setInterval(async () => {
       try {
         const res = await fetch(`/api/shop/feed?limit=25&rareOnly=1&afterId=${lastFeedIdRef.current}`, {
@@ -503,6 +570,10 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
 
   useEffect(
     () => () => {
+      if (bgmAudioRef.current) {
+        bgmAudioRef.current.pause();
+        bgmAudioRef.current.currentTime = 0;
+      }
       if (drawCloseTimerRef.current) {
         window.clearTimeout(drawCloseTimerRef.current);
       }
@@ -858,6 +929,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
 
   return (
     <main className="min-h-screen bg-[#04070d] px-4 py-8 text-white sm:px-8">
+      <audio ref={bgmAudioRef} src="/shop-bgm-pirates.mp3" preload="auto" hidden />
       <div
         className="pointer-events-none fixed inset-0 opacity-70"
         style={{
@@ -1032,6 +1104,38 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+              onClick={() => {
+                const nextEnabled = !bgmEnabled;
+                setBgmEnabled(nextEnabled);
+
+                const audio = bgmAudioRef.current;
+                if (!audio) return;
+
+                if (!nextEnabled) {
+                  audio.pause();
+                  audio.currentTime = 0;
+                  setBgmBlocked(false);
+                  return;
+                }
+
+                audio.loop = true;
+                audio.volume = 0.32;
+                void audio
+                  .play()
+                  .then(() => setBgmBlocked(false))
+                  .catch(() => setBgmBlocked(true));
+              }}
+            >
+              {bgmEnabled ? (
+                <Volume2 className="mr-1 h-4 w-4" />
+              ) : (
+                <VolumeX className="mr-1 h-4 w-4" />
+              )}
+              {bgmEnabled ? "BGM 끄기" : "BGM 켜기"}
+            </Button>
             <Link href={isAdmin ? "/admin" : "/"}>
               <Button
                 variant="secondary"
@@ -1071,6 +1175,13 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           기프티콘 상품은 매주 토요일에 지급되며, 실물 상품은 배송 일정에 따라 지급에 최대
           2주 소요될 수 있습니다.
         </div>
+
+        {bgmEnabled && bgmBlocked && (
+          <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100/95">
+            브라우저 자동재생 제한으로 배경음악이 잠시 대기 중입니다. 화면을 한 번 터치하거나
+            클릭하면 바로 재생됩니다.
+          </div>
+        )}
 
         <div className="rounded-2xl border border-amber-200/20 bg-amber-400/10 px-4 py-3">
           <p className="text-sm text-amber-100">
