@@ -669,14 +669,12 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
             >
               <div className="absolute -inset-x-8 -inset-y-6 rounded-full bg-sky-400/12 blur-3xl" />
               <IntroWriteLine
-                text="HAN'S PHYSICS"
+                text="Han's Physics"
                 delay={0.38}
-                className="relative text-5xl tracking-[0.03em] text-white italic drop-shadow-[0_10px_35px_rgba(255,255,255,0.18)] sm:text-7xl"
+                className="relative text-5xl tracking-tight text-white italic drop-shadow-[0_10px_40px_rgba(255,255,255,0.12)] sm:text-7xl lg:text-8xl"
                 cursorClassName="bg-sky-100/95"
                 textStyle={{
-                  fontFamily:
-                    '"Snell Roundhand", "Apple Chancery", "Brush Script MT", "Segoe Script", cursive',
-                  fontWeight: 500,
+                  fontFamily: '"Times New Roman", "Georgia", serif',
                 }}
               />
             </motion.div>
