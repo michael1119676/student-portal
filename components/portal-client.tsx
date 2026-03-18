@@ -376,6 +376,8 @@ const quickLinks = [
   },
 ];
 
+const LOGIN_INTRO_SESSION_KEY = "portal-login-intro-seen";
+
 function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
@@ -538,6 +540,7 @@ export default function PortalClient({
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginFailCount, setLoginFailCount] = useState(0);
+  const [showLoginIntro, setShowLoginIntro] = useState(!initialSessionUser);
 
   const [selectedKorean, setSelectedKorean] = useState(initialProfile?.korean_subject || "언어와 매체");
   const [selectedMath, setSelectedMath] = useState(initialProfile?.math_subject || "미적분");
@@ -646,6 +649,18 @@ export default function PortalClient({
   useEffect(() => {
     setAdminStudents(managedStudents);
   }, [managedStudents]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (isLoggedIn) {
+      setShowLoginIntro(false);
+      return;
+    }
+
+    const hasSeenIntro = window.sessionStorage.getItem(LOGIN_INTRO_SESSION_KEY) === "1";
+    setShowLoginIntro(!hasSeenIntro);
+  }, [isLoggedIn]);
 
   const selectedRoundDetail = useMemo(() => {
     if (!seasonCData || selectedRound === null) return null;
@@ -1531,6 +1546,13 @@ export default function PortalClient({
     applyProfile(data.profile as StudentProfile | undefined);
   };
 
+  const dismissLoginIntro = () => {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(LOGIN_INTRO_SESSION_KEY, "1");
+    }
+    setShowLoginIntro(false);
+  };
+
   const handleLogout = async () => {
     await fetch("/api/logout", { method: "POST" });
     if (isAdminMode) {
@@ -1846,6 +1868,60 @@ export default function PortalClient({
   return (
     <div className="min-h-screen bg-[#06070a] text-white">
       <div className="relative overflow-hidden">
+        <AnimatePresence>
+          {!isLoggedIn && showLoginIntro && (
+            <motion.div
+              key="login-intro"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
+              className="fixed inset-0 z-[90] overflow-hidden bg-black"
+            >
+              <video
+                className="h-full w-full object-cover"
+                src="/intro-login.mp4"
+                autoPlay
+                muted
+                playsInline
+                preload="auto"
+                onEnded={dismissLoginIntro}
+                onError={dismissLoginIntro}
+              />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/70 via-black/15 to-black/80" />
+              <div className="absolute inset-x-0 top-0 flex items-center justify-between px-5 py-5 sm:px-8">
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.38em] text-white/55">
+                    Han&apos;s Physics Portal
+                  </p>
+                  <p className="text-sm text-white/75 sm:text-base">
+                    실력이 만드는 결과의 차이
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20"
+                  onClick={dismissLoginIntro}
+                >
+                  건너뛰기
+                </Button>
+              </div>
+              <div className="absolute inset-x-0 bottom-0 px-5 pb-8 sm:px-8 sm:pb-10">
+                <motion.div
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                  className="mx-auto max-w-4xl rounded-[2rem] border border-white/10 bg-black/20 px-5 py-5 backdrop-blur-md"
+                >
+                  <p className="text-center text-sm text-white/72 sm:text-base">
+                    인트로가 끝나면 로그인 화면이 열립니다.
+                  </p>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.15),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_20%)]" />
         <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
           <header className="flex flex-col gap-4 py-2 lg:flex-row lg:items-start lg:justify-between">
