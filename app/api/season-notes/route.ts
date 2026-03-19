@@ -3,6 +3,7 @@ import {
   getSessionUserFromCookies,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { createAdminCommentNotification } from "@/lib/notifications";
 import { rejectIfCrossOrigin } from "@/lib/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -223,6 +224,7 @@ export async function POST(request: Request) {
 
   const nextStudentNote = nextStudentNoteRaw?.slice(0, 4000);
   const nextAdminComment = nextAdminCommentRaw?.slice(0, 4000);
+  const previousAdminComment = existing?.admin_comment ?? "";
 
   const updatePayload: Record<string, unknown> = {
     updated_at: now,
@@ -304,6 +306,25 @@ export async function POST(request: Request) {
       },
       created_at: now,
     });
+
+    const shouldNotifyAdminComment =
+      nextAdminComment !== undefined &&
+      nextAdminComment.trim().length > 0 &&
+      nextAdminComment.trim() !== previousAdminComment.trim();
+
+    if (shouldNotifyAdminComment) {
+      try {
+        await createAdminCommentNotification(supabase, {
+          studentId: targetStudentId,
+          season,
+          round: safeRound,
+          comment: nextAdminComment,
+          createdBy: user.id,
+        });
+      } catch (error) {
+        console.error("[notifications] admin comment notification failed", error);
+      }
+    }
   }
 
   return NextResponse.json({

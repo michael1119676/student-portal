@@ -4,6 +4,7 @@ import {
   requireAdmin,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { createStudentScoreNotification } from "@/lib/notifications";
 import { rejectIfCrossOrigin } from "@/lib/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -131,6 +132,18 @@ export async function POST(request: Request) {
     created_at: now,
   });
 
+  try {
+    await createStudentScoreNotification(supabase, {
+      studentId,
+      season,
+      round: safeRound,
+      score,
+      createdBy: user.id,
+    });
+  } catch (error) {
+    console.error("[notifications] score insert notification failed", error);
+  }
+
   return NextResponse.json({
     ok: true,
     created: true,
@@ -138,4 +151,3 @@ export async function POST(request: Request) {
     message: "성적 레코드를 신규 입력했습니다. 코인 +1이 자동 지급됩니다.",
   });
 }
-

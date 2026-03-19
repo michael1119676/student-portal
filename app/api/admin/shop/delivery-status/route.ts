@@ -4,6 +4,7 @@ import {
   requireAdmin,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { createDeliveryCompleteNotification } from "@/lib/notifications";
 import { rejectIfCrossOrigin } from "@/lib/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -63,6 +64,26 @@ export async function POST(request: Request) {
       { ok: false, message: row?.message || "지급 상태 수정에 실패했습니다." },
       { status: 400 }
     );
+  }
+
+  if (row.delivery_completed) {
+    try {
+      const { data: drawLog } = await supabase
+        .from("draw_logs")
+        .select("student_id, product_name")
+        .eq("id", Math.round(drawLogId))
+        .maybeSingle();
+
+      if (drawLog?.student_id && drawLog?.product_name) {
+        await createDeliveryCompleteNotification(supabase, {
+          studentId: drawLog.student_id,
+          productName: drawLog.product_name,
+          createdBy: user.id,
+        });
+      }
+    } catch (error) {
+      console.error("[notifications] delivery notification failed", error);
+    }
   }
 
   return NextResponse.json({

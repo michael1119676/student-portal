@@ -5,10 +5,13 @@ import Image from "next/image";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
+  Bell,
   BookOpen,
+  CheckCheck,
   Gift,
   GraduationCap,
   Instagram,
+  Megaphone,
   MessageCircleMore,
   Phone,
   Search,
@@ -243,6 +246,20 @@ type AdminSeasonNotesResponse = {
   ok: boolean;
   message?: string;
   items?: AdminSeasonNoteItem[];
+};
+
+type PortalNotificationItem = {
+  id: number;
+  type: "score_input" | "admin_comment" | "delivery_complete" | "announcement";
+  audience: "single" | "all" | "students" | "admins";
+  title: string;
+  body: string;
+  isImportant: boolean;
+  season: string | null;
+  round: number | null;
+  relatedPath: string | null;
+  createdAt: string;
+  read: boolean;
 };
 
 type AdminSeasonCutoffsResponse = {
@@ -629,6 +646,20 @@ function ScriptLogo() {
       </h1>
     </div>
   );
+}
+
+function notificationTypeLabel(type: PortalNotificationItem["type"]) {
+  if (type === "score_input") return "새 성적";
+  if (type === "admin_comment") return "관리자 댓글";
+  if (type === "delivery_complete") return "지급 완료";
+  return "공지";
+}
+
+function notificationTypeBadgeClass(type: PortalNotificationItem["type"]) {
+  if (type === "score_input") return "border-sky-300/30 bg-sky-400/10 text-sky-100";
+  if (type === "admin_comment") return "border-emerald-300/30 bg-emerald-400/10 text-emerald-100";
+  if (type === "delivery_complete") return "border-amber-300/30 bg-amber-400/10 text-amber-100";
+  return "border-fuchsia-300/30 bg-fuchsia-400/10 text-fuchsia-100";
 }
 
 function IntroWriteLine({
@@ -1053,7 +1084,18 @@ export default function PortalClient({
   const [selectedAdminNoteId, setSelectedAdminNoteId] = useState<number | null>(null);
   const [adminManagedNoteDraft, setAdminManagedNoteDraft] = useState("");
   const [adminManagedCommentDraft, setAdminManagedCommentDraft] = useState("");
+  const [notifications, setNotifications] = useState<PortalNotificationItem[]>([]);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementBody, setAnnouncementBody] = useState("");
+  const [announcementAudience, setAnnouncementAudience] = useState<"all" | "students" | "admins">("all");
+  const [announcementImportant, setAnnouncementImportant] = useState(true);
+  const [announcementSaving, setAnnouncementSaving] = useState(false);
   const studentProfileCacheRef = useRef<Record<string, StudentProfile | null>>({});
+  const notificationPanelRef = useRef<HTMLDivElement | null>(null);
 
   const isLoggedIn = !!sessionUser;
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
@@ -1106,6 +1148,186 @@ export default function PortalClient({
     );
   }, [adminStudents, studentSearch]);
 
+  const fetchNotifications = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!sessionUser) return;
+
+      if (!options?.silent) {
+        setNotificationLoading(true);
+      }
+
+      try {
+        const res = await fetch("/api/notifications", { cache: "no-store" });
+        const data = (await res.json()) as {
+          ok: boolean;
+          message?: string;
+          items?: PortalNotificationItem[];
+          unreadCount?: number;
+        };
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.message || "알림을 불러오지 못했습니다.");
+        }
+
+        setNotifications(data.items ?? []);
+        setUnreadNotificationCount(Number(data.unreadCount ?? 0));
+        if (!options?.silent) {
+          setNotificationMessage("");
+        }
+      } catch (error) {
+        if (!options?.silent) {
+          setNotificationMessage(
+            error instanceof Error ? error.message : "알림을 불러오지 못했습니다."
+          );
+        }
+      } finally {
+        if (!options?.silent) {
+          setNotificationLoading(false);
+        }
+      }
+    },
+    [sessionUser]
+  );
+
+  const markNotificationsRead = useCallback(
+    async (options: { notificationIds?: number[]; markAll?: boolean }) => {
+      if (!sessionUser) return [] as number[];
+
+      const notificationIds = (options.notificationIds ?? []).filter((value) =>
+        Number.isFinite(value)
+      );
+
+      if (!options.markAll && notificationIds.length === 0) return [] as number[];
+
+      const res = await fetch("/api/notifications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          notificationIds,
+          markAll: options.markAll === true,
+        }),
+      });
+
+      const data = (await res.json()) as {
+        ok: boolean;
+        message?: string;
+        readIds?: number[];
+      };
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "읽음 처리에 실패했습니다.");
+      }
+
+      const readIds = [...new Set((data.readIds ?? []).map((value) => Number(value)))];
+      if (readIds.length > 0) {
+        const readSet = new Set(readIds);
+        setNotifications((prev) => {
+          return prev.map((item) => (readSet.has(item.id) ? { ...item, read: true } : item));
+        });
+        const newlyReadCount = notifications.filter(
+          (item) => !item.read && readSet.has(item.id)
+        ).length;
+        setUnreadNotificationCount((prev) => Math.max(0, prev - newlyReadCount));
+      }
+
+      return readIds;
+    },
+    [notifications, sessionUser]
+  );
+
+  const handleNotificationClick = useCallback(
+    async (item: PortalNotificationItem) => {
+      try {
+        if (!item.read) {
+          await markNotificationsRead({ notificationIds: [item.id] });
+        }
+      } catch (error) {
+        setNotificationMessage(
+          error instanceof Error ? error.message : "읽음 처리에 실패했습니다."
+        );
+      }
+
+      setNotificationCenterOpen(false);
+
+      if (item.relatedPath === "/shop") {
+        window.location.href = "/shop";
+        return;
+      }
+
+      if (item.season && item.round && canShowStudentPortal) {
+        pushPortalHistoryEntry();
+        setSelectedSeason(item.season);
+        setSelectedRound(item.season === "C" ? item.round : null);
+        setSelectedNRound(item.season === "N" ? item.round : null);
+        setSelectedPremiumRound(isPremiumSeason(item.season) ? item.round : null);
+      }
+    },
+    [canShowStudentPortal, markNotificationsRead, pushPortalHistoryEntry]
+  );
+
+  const handleMarkAllNotificationsRead = useCallback(async () => {
+    try {
+      await markNotificationsRead({ markAll: true });
+      setNotificationMessage("알림을 모두 읽음 처리했습니다.");
+    } catch (error) {
+      setNotificationMessage(
+        error instanceof Error ? error.message : "읽음 처리에 실패했습니다."
+      );
+    }
+  }, [markNotificationsRead]);
+
+  const handleCreateAnnouncement = useCallback(async () => {
+    const title = announcementTitle.trim();
+    const body = announcementBody.trim();
+
+    if (!title || !body) {
+      setNotificationMessage("공지 제목과 내용을 모두 입력해 주세요.");
+      return;
+    }
+
+    setAnnouncementSaving(true);
+    try {
+      const res = await fetch("/api/admin/notifications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          body,
+          audience: announcementAudience,
+          isImportant: announcementImportant,
+        }),
+      });
+
+      const data = (await res.json()) as { ok: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "공지 등록에 실패했습니다.");
+      }
+
+      setAnnouncementTitle("");
+      setAnnouncementBody("");
+      setAnnouncementAudience("all");
+      setAnnouncementImportant(true);
+      setNotificationMessage(data.message || "공지를 등록했습니다.");
+      await fetchNotifications();
+    } catch (error) {
+      setNotificationMessage(
+        error instanceof Error ? error.message : "공지 등록에 실패했습니다."
+      );
+    } finally {
+      setAnnouncementSaving(false);
+    }
+  }, [
+    announcementAudience,
+    announcementBody,
+    announcementImportant,
+    announcementTitle,
+    fetchNotifications,
+  ]);
+
   useEffect(() => {
     setAdminStudents(managedStudents);
   }, [managedStudents]);
@@ -1121,6 +1343,49 @@ export default function PortalClient({
     const hasSeenIntro = window.sessionStorage.getItem(LOGIN_INTRO_SESSION_KEY) === "1";
     setShowLoginIntro(!hasSeenIntro);
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setNotifications([]);
+      setUnreadNotificationCount(0);
+      setNotificationCenterOpen(false);
+      return;
+    }
+
+    void fetchNotifications({ silent: true });
+
+    const timer = window.setInterval(() => {
+      void fetchNotifications({ silent: true });
+    }, 45000);
+
+    return () => window.clearInterval(timer);
+  }, [fetchNotifications, isLoggedIn]);
+
+  useEffect(() => {
+    if (!notificationCenterOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        notificationPanelRef.current &&
+        !notificationPanelRef.current.contains(event.target as Node)
+      ) {
+        setNotificationCenterOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setNotificationCenterOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [notificationCenterOpen]);
 
   const selectedRoundDetail = useMemo(() => {
     if (!seasonCData || selectedRound === null) return null;
@@ -1237,7 +1502,7 @@ export default function PortalClient({
     setNewPin("");
   }
 
-  function pushPortalHistoryEntry() {
+  const pushPortalHistoryEntry = useCallback(() => {
     if (typeof window === "undefined") return;
     const state: PortalHistoryState = {
       __portalNav: true,
@@ -1246,7 +1511,7 @@ export default function PortalClient({
       selectedStudentId: selectedStudent?.id ?? null,
     };
     window.history.pushState(state, "", window.location.href);
-  }
+  }, [adminStep, selectedSeason, selectedStudent?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2367,6 +2632,178 @@ export default function PortalClient({
 
             {isLoggedIn && (
               <div className="flex w-full flex-wrap items-center justify-end gap-2 lg:w-auto lg:gap-3">
+                <div className="relative" ref={notificationPanelRef}>
+                  <Button
+                    variant="secondary"
+                    className="relative h-11 rounded-2xl bg-white/10 px-3 text-sm text-white hover:bg-white/20 touch-manipulation"
+                    onClick={() => {
+                      const nextOpen = !notificationCenterOpen;
+                      setNotificationCenterOpen(nextOpen);
+                      if (nextOpen) {
+                        void fetchNotifications();
+                      }
+                    }}
+                  >
+                    <Bell className="h-4 w-4" />
+                    <span className="sr-only">알림 센터 열기</span>
+                    {unreadNotificationCount > 0 && (
+                      <span className="absolute -right-1 -top-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                      </span>
+                    )}
+                  </Button>
+
+                  {notificationCenterOpen && (
+                    <div className="absolute right-0 top-full z-50 mt-3 w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-[1.6rem] border border-white/10 bg-[#0b0d12]/95 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                      <div className="border-b border-white/10 px-4 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">공지/알림 센터</p>
+                            <p className="mt-1 text-xs text-white/55">
+                              새 성적, 관리자 댓글, 지급 완료, 중요 공지를 확인할 수 있습니다.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="secondary"
+                              className="h-9 rounded-xl bg-white/10 px-3 text-xs text-white hover:bg-white/20 touch-manipulation"
+                              onClick={() => void handleMarkAllNotificationsRead()}
+                              disabled={unreadNotificationCount === 0}
+                            >
+                              <CheckCheck className="mr-1 h-3.5 w-3.5" />
+                              모두 읽음
+                            </Button>
+                          </div>
+                        </div>
+                        {notificationMessage && (
+                          <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75">
+                            {notificationMessage}
+                          </div>
+                        )}
+                      </div>
+
+                      {sessionUser?.role === "admin" && (
+                        <div className="border-b border-white/10 px-4 py-4">
+                          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+                            <Megaphone className="h-4 w-4 text-amber-200" />
+                            공지 작성
+                          </div>
+                          <div className="space-y-3">
+                            <Input
+                              value={announcementTitle}
+                              onChange={(e) => setAnnouncementTitle(e.target.value)}
+                              placeholder="공지 제목"
+                              className="h-10 rounded-xl border-white/10 bg-black/30 text-white placeholder:text-white/35"
+                            />
+                            <textarea
+                              value={announcementBody}
+                              onChange={(e) => setAnnouncementBody(e.target.value)}
+                              placeholder="중요 공지 내용을 입력해 주세요."
+                              className="min-h-[96px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                            />
+                            <div className="flex flex-wrap items-center gap-3">
+                              <select
+                                value={announcementAudience}
+                                onChange={(e) =>
+                                  setAnnouncementAudience(
+                                    e.target.value as "all" | "students" | "admins"
+                                  )
+                                }
+                                className="h-10 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white"
+                              >
+                                <option value="all">전체 대상</option>
+                                <option value="students">학생 대상</option>
+                                <option value="admins">관리자 대상</option>
+                              </select>
+                              <label className="flex items-center gap-2 text-xs text-white/75">
+                                <input
+                                  type="checkbox"
+                                  checked={announcementImportant}
+                                  onChange={(e) => setAnnouncementImportant(e.target.checked)}
+                                />
+                                중요 공지로 표시
+                              </label>
+                              <Button
+                                className="ml-auto h-10 rounded-xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
+                                onClick={() => void handleCreateAnnouncement()}
+                                disabled={announcementSaving}
+                              >
+                                {announcementSaving ? "등록 중..." : "공지 등록"}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="max-h-[min(62vh,540px)] overflow-y-auto px-3 py-3">
+                        {notificationLoading && notifications.length === 0 ? (
+                          <div className="space-y-3">
+                            {Array.from({ length: 4 }).map((_, index) => (
+                              <div
+                                key={`notification-skeleton-${index}`}
+                                className="rounded-2xl border border-white/10 bg-white/5 p-3"
+                              >
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="mt-3 h-4 w-40" />
+                                <Skeleton className="mt-2 h-4 w-full" />
+                                <Skeleton className="mt-2 h-4 w-3/4" />
+                              </div>
+                            ))}
+                          </div>
+                        ) : notifications.length === 0 ? (
+                          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-white/60">
+                            아직 도착한 알림이 없습니다.
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {notifications.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => void handleNotificationClick(item)}
+                                className={`w-full rounded-2xl border px-4 py-3 text-left transition touch-manipulation ${
+                                  item.read
+                                    ? "border-white/10 bg-white/5 hover:bg-white/10"
+                                    : "border-sky-300/25 bg-sky-400/10 hover:bg-sky-400/15"
+                                }`}
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={`rounded-full border px-2 py-0.5 text-[11px] ${notificationTypeBadgeClass(
+                                        item.type
+                                      )}`}
+                                    >
+                                      {notificationTypeLabel(item.type)}
+                                    </span>
+                                    {item.isImportant && (
+                                      <span className="rounded-full border border-amber-300/35 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100">
+                                        중요
+                                      </span>
+                                    )}
+                                    {!item.read && (
+                                      <span className="rounded-full border border-rose-300/35 bg-rose-500/15 px-2 py-0.5 text-[11px] text-rose-100">
+                                        새 알림
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-white/45">
+                                    {formatKst(item.createdAt)}
+                                  </span>
+                                </div>
+                                <p className="mt-3 text-sm font-semibold text-white">{item.title}</p>
+                                <p className="mt-2 line-clamp-2 text-sm leading-6 text-white/70">
+                                  {item.body}
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {isAdminMode && selectedStudent && (
                   <Button
                     variant="secondary"
