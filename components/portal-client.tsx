@@ -1189,6 +1189,17 @@ export default function PortalClient({
     [sessionUser]
   );
 
+  const pushPortalHistoryEntry = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const state: PortalHistoryState = {
+      __portalNav: true,
+      selectedSeason,
+      adminStep,
+      selectedStudentId: selectedStudent?.id ?? null,
+    };
+    window.history.pushState(state, "", window.location.href);
+  }, [adminStep, selectedSeason, selectedStudent?.id]);
+
   const markNotificationsRead = useCallback(
     async (options: { notificationIds?: number[]; markAll?: boolean }) => {
       if (!sessionUser) return [] as number[];
@@ -1501,17 +1512,6 @@ export default function PortalClient({
     setLoginError("");
     setNewPin("");
   }
-
-  const pushPortalHistoryEntry = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const state: PortalHistoryState = {
-      __portalNav: true,
-      selectedSeason,
-      adminStep,
-      selectedStudentId: selectedStudent?.id ?? null,
-    };
-    window.history.pushState(state, "", window.location.href);
-  }, [adminStep, selectedSeason, selectedStudent?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
