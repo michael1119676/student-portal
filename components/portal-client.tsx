@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   getPremiumRoundLabel,
   getPremiumSeasonMeta,
@@ -476,6 +477,146 @@ function formatKst(value: string | null | undefined) {
   }).format(date);
 }
 
+function PortalBootSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#06070a] text-white">
+      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+        <div className="flex flex-1 items-center">
+          <div className="grid w-full items-center gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="space-y-5">
+              <Skeleton className="h-16 w-64 rounded-full sm:h-20 sm:w-80" />
+              <Skeleton className="h-5 w-56" />
+              <Skeleton className="h-5 w-72" />
+            </div>
+            <Card className="rounded-[2rem] border border-white/10 bg-white/6 text-white shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+              <CardHeader className="space-y-4">
+                <Skeleton className="h-8 w-36" />
+                <Skeleton className="h-4 w-full max-w-sm" />
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-12 w-full rounded-2xl" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-12 w-full rounded-2xl" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-12 w-full rounded-2xl" />
+                </div>
+                <Skeleton className="h-12 w-full rounded-2xl" />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SeasonOverviewSkeleton({
+  columns,
+  minWidthClass,
+}: {
+  columns: number;
+  minWidthClass: string;
+}) {
+  const columnClass =
+    columns === 12 ? "grid-cols-12" : columns === 8 ? "grid-cols-8" : "grid-cols-10";
+
+  return (
+    <div className="space-y-6">
+      <div className="relative overflow-x-auto">
+        <div
+          className={`relative h-[320px] rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 sm:h-[390px] sm:px-6 sm:py-6 ${minWidthClass}`}
+        >
+          <div className="absolute inset-x-4 top-4 bottom-14 sm:inset-x-6 sm:top-6 sm:bottom-14">
+            <div className="absolute inset-x-0 top-0 border-t border-white/10" />
+            <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
+            <div className="absolute inset-x-0 bottom-0 border-t border-white/20" />
+            <div className="absolute inset-y-0 left-0 border-l border-white/20" />
+          </div>
+          <div className={`absolute left-10 right-4 top-4 bottom-14 grid gap-2 sm:left-12 sm:right-6 sm:top-6 ${columnClass}`}>
+            {Array.from({ length: columns }).map((_, index) => (
+              <div key={`season-skeleton-${index}`} className="flex flex-col justify-end items-center gap-3">
+                <Skeleton
+                  className="w-7 rounded-t-xl sm:w-9"
+                  style={{ height: `${28 + ((index * 11) % 52)}%` }}
+                />
+                <Skeleton className="h-10 w-full rounded-lg" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="mt-3 h-9 w-24" />
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="mt-3 h-9 w-24" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SeasonDetailSkeleton({
+  includeNScoreRow = false,
+  showQuestionTables = true,
+}: {
+  includeNScoreRow?: boolean;
+  showQuestionTables?: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className={`grid gap-4 ${includeNScoreRow ? "md:grid-cols-3 xl:grid-cols-5" : "md:grid-cols-2"}`}>
+        {Array.from({ length: includeNScoreRow ? 5 : 2 }).map((_, index) => (
+          <div
+            key={`season-detail-card-${index}`}
+            className="rounded-2xl border border-white/10 bg-black/20 p-4"
+          >
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="mt-3 h-9 w-24" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-4">
+          <Skeleton className="h-4 w-20" />
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={`class-row-${index}`} className="h-10 w-full" />
+            ))}
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-4">
+          <Skeleton className="h-4 w-28" />
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={`wrong-row-${index}`} className="h-10 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+      {showQuestionTables && (
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-4">
+          <Skeleton className="h-4 w-40" />
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={`question-row-${index}`} className="h-10 w-full" />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScriptLogo() {
   return (
     <div className="relative inline-block">
@@ -535,7 +676,7 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
   }, [onComplete]);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const mediaQuery = window.matchMedia("(max-width: 1024px)");
     const updateCompactState = () => setIsCompactIntro(mediaQuery.matches);
 
     updateCompactState();
@@ -614,7 +755,7 @@ function AnimatedLoginIntro({ onComplete }: { onComplete: () => void }) {
         </>
       )}
 
-      {[0, 1, 2, 3, ...(useCompactMotion ? [] : [4, 5])].map((index) => {
+      {[0, 1, 2, ...(useCompactMotion ? [] : [3, 4, 5])].map((index) => {
         const offsets = [
           { left: "18%", top: "28%" },
           { left: "30%", top: "68%" },
@@ -837,10 +978,12 @@ export default function PortalClient({
   managedStudents = [],
 }: PortalClientProps) {
   const isAdminMode = mode === "admin";
+  const prefersReducedMotion = useReducedMotion();
 
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(initialSessionUser);
   const [isCheckingSession, setIsCheckingSession] = useState(!initialSessionUser);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
 
   const [studentName, setStudentName] = useState("");
   const [phone, setPhone] = useState("");
@@ -916,6 +1059,7 @@ export default function PortalClient({
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
   const canShowStudentPortal = isAdminMode ? !!sessionUser && !!selectedStudent : isLoggedIn;
   const profile = universityProfiles[targetUniversity];
+  const useCompactUi = prefersReducedMotion || isCompactViewport;
   const selectedPremiumSeason = isPremiumSeason(selectedSeason) ? selectedSeason : null;
   const currentPremiumDataKey =
     selectedPremiumSeason && visibleUser?.id ? `${selectedPremiumSeason}:${visibleUser.id}` : null;
@@ -941,6 +1085,15 @@ export default function PortalClient({
       /^\d{4}$/.test(pin)
     );
   }, [studentName, phone, pin]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const updateCompactViewport = () => setIsCompactViewport(mediaQuery.matches);
+
+    updateCompactViewport();
+    mediaQuery.addEventListener("change", updateCompactViewport);
+    return () => mediaQuery.removeEventListener("change", updateCompactViewport);
+  }, []);
 
   const filteredStudents = useMemo(() => {
     const keyword = studentSearch.trim().toLowerCase();
@@ -2111,8 +2264,14 @@ export default function PortalClient({
         </CardHeader>
         <CardContent className="space-y-4">
           {seasonNoteLoading ? (
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-8 text-center text-white/65">
-              메모를 불러오는 중...
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-32 w-full rounded-2xl" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="mt-2 h-4 w-24" />
+                <Skeleton className="h-24 w-full rounded-2xl" />
+              </div>
             </div>
           ) : (
             <>
@@ -2165,11 +2324,7 @@ export default function PortalClient({
   }
 
   if (isCheckingSession) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#06070a] text-white">
-        로딩 중...
-      </div>
-    );
+    return <PortalBootSkeleton />;
   }
 
   return (
@@ -2215,7 +2370,7 @@ export default function PortalClient({
                 {isAdminMode && selectedStudent && (
                   <Button
                     variant="secondary"
-                    className="h-10 rounded-2xl bg-white/10 px-3 text-sm text-white hover:bg-white/20"
+                    className="h-11 rounded-2xl bg-white/10 px-4 text-sm text-white hover:bg-white/20 touch-manipulation"
                     onClick={() => {
                       setSelectedStudent(null);
                       setSelectedSeason(null);
@@ -2230,7 +2385,7 @@ export default function PortalClient({
                 {canShowStudentPortal && (
                   <Button
                     variant="secondary"
-                    className="h-10 rounded-2xl bg-white/10 px-3 text-sm text-white hover:bg-white/20"
+                    className="h-11 rounded-2xl bg-white/10 px-4 text-sm text-white hover:bg-white/20 touch-manipulation"
                     onClick={() => setIsEditingProfile(true)}
                   >
                     <Settings className="mr-2 h-4 w-4" />
@@ -2239,7 +2394,7 @@ export default function PortalClient({
                 )}
                 <Button
                   variant="secondary"
-                  className="h-10 rounded-2xl bg-white/10 px-3 text-sm text-white hover:bg-white/20"
+                  className="h-11 rounded-2xl bg-white/10 px-4 text-sm text-white hover:bg-white/20 touch-manipulation"
                   onClick={handleLogout}
                 >
                   로그아웃
@@ -2361,7 +2516,7 @@ export default function PortalClient({
                             href={link.href}
                             target={link.href.startsWith("http") ? "_blank" : undefined}
                             rel={link.href.startsWith("http") ? "noreferrer" : undefined}
-                            className="group rounded-[1.4rem] border border-white/10 bg-white/5 p-4 text-left transition-all duration-200 hover:-translate-y-1 hover:bg-white/10"
+                            className="group min-h-[124px] rounded-[1.4rem] border border-white/10 bg-white/5 p-5 text-left transition-all duration-200 hover:-translate-y-1 hover:bg-white/10 touch-manipulation"
                           >
                             <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white/80">
                               <Icon className="h-5 w-5" />
@@ -3009,9 +3164,7 @@ export default function PortalClient({
                         </div>
 
                         {adminStatsLoading ? (
-                          <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
-                            통계를 불러오는 중...
-                          </div>
+                          <SeasonDetailSkeleton showQuestionTables={!isPremiumSeason(statsSeason)} />
                         ) : adminStatsError ? (
                           <div className="rounded-[1.5rem] border border-amber-300/30 bg-amber-500/10 p-6 text-amber-100">
                             {adminStatsError}
@@ -3179,7 +3332,7 @@ export default function PortalClient({
                               key={student.id}
                               type="button"
                               onClick={() => handleSelectStudent(student)}
-                              className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+                              className="min-h-[88px] rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10 touch-manipulation"
                             >
                               <div className="flex items-center justify-between gap-4">
                                 <div>
@@ -3213,7 +3366,10 @@ export default function PortalClient({
                         </div>
 
                         {isLoadingStudent && (
-                          <p className="text-sm text-white/60">학생 정보를 불러오는 중...</p>
+                          <div className="space-y-2">
+                            <Skeleton className="h-5 w-28" />
+                            <Skeleton className="h-16 w-full rounded-[1.5rem]" />
+                          </div>
                         )}
                         {saveMessage && (
                           <p className="text-sm text-white/60">{saveMessage}</p>
@@ -3494,7 +3650,7 @@ export default function PortalClient({
                     <div className="mx-auto w-full max-w-5xl">
                       <a
                         href="/shop"
-                        className="group block w-full text-left"
+                        className="group block w-full touch-manipulation text-left"
                       >
                         <Card className="rounded-[2rem] border border-amber-200/25 bg-amber-400/10 text-white transition duration-300 group-hover:-translate-y-0.5 group-hover:border-amber-200/40 group-hover:bg-amber-400/15">
                           <CardHeader className="space-y-3">
@@ -3520,14 +3676,14 @@ export default function PortalClient({
                         <motion.button
                           type="button"
                           key={season.id}
-                          initial={{ opacity: 0, y: 14 }}
+                          initial={useCompactUi ? false : { opacity: 0, y: 14 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.08 }}
+                          transition={useCompactUi ? { duration: 0.16 } : { delay: index * 0.08 }}
                           onClick={() => {
                             pushPortalHistoryEntry();
                             setSelectedSeason(season.id);
                           }}
-                          className="group text-left"
+                          className="group touch-manipulation text-left"
                         >
                           <Card className="h-full rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl transition-all duration-200 group-hover:-translate-y-1 group-hover:bg-white/10">
                             <CardHeader>
@@ -3569,9 +3725,7 @@ export default function PortalClient({
                         </CardHeader>
                         <CardContent>
                           {seasonCLoading ? (
-                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
-                              시즌 C 데이터를 불러오는 중...
-                            </div>
+                            <SeasonOverviewSkeleton columns={10} minWidthClass="min-w-[560px] sm:min-w-[700px]" />
                           ) : seasonCError ? (
                             <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-6 text-red-200">
                               {seasonCError}
@@ -3579,28 +3733,28 @@ export default function PortalClient({
                           ) : seasonCData ? (
                             <div className="space-y-6">
                               <div className="relative overflow-x-auto">
-                                <div className="relative h-[390px] min-w-[700px] rounded-[1.5rem] border border-white/10 bg-black/20 px-6 py-6">
-                                  <div className="pointer-events-none absolute inset-x-6 top-6 bottom-14">
+                                <div className="relative h-[320px] min-w-[560px] rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 sm:h-[390px] sm:min-w-[700px] sm:px-6 sm:py-6">
+                                  <div className="pointer-events-none absolute inset-x-4 top-4 bottom-14 sm:inset-x-6 sm:top-6 sm:bottom-14">
                                     <div className="absolute inset-x-0 top-0 border-t border-white/10" />
                                     <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
                                     <div className="absolute inset-x-0 bottom-0 border-t border-white/20" />
                                     <div className="absolute inset-y-0 left-0 border-l border-white/20" />
                                   </div>
 
-                                  <div className="absolute left-0 top-5 w-10 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 top-4 w-8 text-right text-[11px] text-white/50 sm:top-5 sm:w-12 sm:text-xs">
                                     100
                                   </div>
-                                  <div className="absolute left-0 top-[48%] w-10 -translate-y-1/2 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 top-[48%] w-8 -translate-y-1/2 text-right text-[11px] text-white/50 sm:w-12 sm:text-xs">
                                     50
                                   </div>
-                                  <div className="absolute left-0 bottom-11 w-10 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 bottom-11 w-8 text-right text-[11px] text-white/50 sm:w-12 sm:text-xs">
                                     0
                                   </div>
 
                                   {myPlotPoints.length > 0 && (
                                     <svg
                                       viewBox="0 0 100 100"
-                                      className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
+                                      className="pointer-events-none absolute left-10 right-4 top-4 bottom-14 h-[calc(100%-72px)] w-[calc(100%-56px)] sm:left-12 sm:right-6 sm:top-6 sm:h-[calc(100%-80px)] sm:w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
                                       {smoothLinePath && (
@@ -3636,7 +3790,7 @@ export default function PortalClient({
                                     </svg>
                                   )}
 
-                                  <div className="absolute left-12 right-6 top-6 bottom-14 grid grid-cols-10 gap-2">
+                                  <div className="absolute left-10 right-4 top-4 bottom-14 grid grid-cols-10 gap-1.5 sm:left-12 sm:right-6 sm:top-6 sm:gap-2">
                                     {seasonCData.rounds.map((round) => {
                                       const averageHeight = `${round.averageScore}%`;
                                       const isSelected = selectedRound === round.round;
@@ -3646,12 +3800,12 @@ export default function PortalClient({
                                           key={round.round}
                                           type="button"
                                           onClick={() => setSelectedRound(round.round)}
-                                          className={`relative flex h-full items-end justify-center transition ${
+                                          className={`relative flex h-full items-end justify-center rounded-xl transition touch-manipulation ${
                                             isSelected ? "scale-[1.02]" : "opacity-90 hover:opacity-100"
                                           }`}
                                         >
                                           <div
-                                            className={`w-8 rounded-t-xl bg-white/30 transition sm:w-9 ${
+                                            className={`w-7 rounded-t-xl bg-white/30 transition sm:w-9 ${
                                               isSelected ? "ring-2 ring-sky-300/60" : ""
                                             }`}
                                             style={{ height: averageHeight }}
@@ -3661,22 +3815,22 @@ export default function PortalClient({
                                     })}
                                   </div>
 
-                                  <div className="absolute left-12 right-6 bottom-4 grid grid-cols-10 gap-2">
+                                  <div className="absolute left-10 right-4 bottom-3 grid grid-cols-10 gap-1.5 sm:left-12 sm:right-6 sm:bottom-4 sm:gap-2">
                                     {seasonCData.rounds.map((round) => (
                                       <button
                                         key={`label-${round.round}`}
                                         type="button"
                                         onClick={() => setSelectedRound(round.round)}
-                                        className={`rounded-md py-1 text-center transition ${
+                                        className={`min-h-[3.25rem] rounded-lg px-1 py-2 text-center transition touch-manipulation ${
                                           selectedRound === round.round
                                             ? "bg-white/10"
                                             : "hover:bg-white/5"
                                         }`}
                                       >
-                                        <p className="text-sm font-medium text-white/90">
+                                        <p className="text-xs font-medium text-white/90 sm:text-sm">
                                           {round.round}회
                                         </p>
-                                        <p className="text-[11px] text-white/45">
+                                        <p className="text-[10px] text-white/45 sm:text-[11px]">
                                           평균 {round.averageScore}
                                         </p>
                                       </button>
@@ -3700,7 +3854,19 @@ export default function PortalClient({
                         </CardContent>
                       </Card>
 
-                      {selectedRoundDetail && (
+                      {seasonCLoading && !selectedRoundDetail ? (
+                        <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                          <CardHeader>
+                            <CardTitle className="text-2xl">C시즌 상세 통계</CardTitle>
+                            <CardDescription className="text-white/55">
+                              상세 데이터를 준비하는 중입니다.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <SeasonDetailSkeleton />
+                          </CardContent>
+                        </Card>
+                      ) : !seasonCLoading && selectedRoundDetail && (
                         <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                           <CardHeader>
                             <CardTitle className="text-2xl">
@@ -3933,19 +4099,19 @@ export default function PortalClient({
                         </Card>
                       )}
 
-                      {selectedRoundDetail &&
+                      {!seasonCLoading && selectedRoundDetail &&
                         renderSeasonNoteCard(`C시즌 ${selectedRoundDetail.round}회 시험 셀프 피드백`)}
 
                       <div className="flex flex-wrap gap-3">
                         <Button
-                          className="rounded-2xl bg-white text-black hover:bg-white/90"
+                          className="h-11 rounded-2xl bg-white px-5 text-black hover:bg-white/90 touch-manipulation"
                           onClick={() => setSelectedSeason(null)}
                         >
                           시즌 다시 선택
                         </Button>
                         <Button
                           variant="secondary"
-                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          className="h-11 rounded-2xl bg-white/10 px-5 text-white hover:bg-white/20 touch-manipulation"
                           onClick={handleReturnToPortalHome}
                         >
                           처음 화면으로
@@ -3973,9 +4139,7 @@ export default function PortalClient({
                         </CardHeader>
                         <CardContent>
                           {seasonNLoading ? (
-                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
-                              시즌 N 데이터를 불러오는 중...
-                            </div>
+                            <SeasonOverviewSkeleton columns={12} minWidthClass="min-w-[620px] sm:min-w-[780px]" />
                           ) : seasonNError ? (
                             <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-6 text-red-200">
                               {seasonNError}
@@ -3983,28 +4147,28 @@ export default function PortalClient({
                           ) : seasonNData ? (
                             <div className="space-y-6">
                               <div className="relative overflow-x-auto">
-                                <div className="relative h-[390px] min-w-[780px] rounded-[1.5rem] border border-white/10 bg-black/20 px-6 py-6">
-                                  <div className="pointer-events-none absolute inset-x-6 top-6 bottom-14">
+                                <div className="relative h-[320px] min-w-[620px] rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 sm:h-[390px] sm:min-w-[780px] sm:px-6 sm:py-6">
+                                  <div className="pointer-events-none absolute inset-x-4 top-4 bottom-14 sm:inset-x-6 sm:top-6 sm:bottom-14">
                                     <div className="absolute inset-x-0 top-0 border-t border-white/10" />
                                     <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
                                     <div className="absolute inset-x-0 bottom-0 border-t border-white/20" />
                                     <div className="absolute inset-y-0 left-0 border-l border-white/20" />
                                   </div>
 
-                                  <div className="absolute left-0 top-5 w-10 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 top-4 w-8 text-right text-[11px] text-white/50 sm:top-5 sm:w-12 sm:text-xs">
                                     50
                                   </div>
-                                  <div className="absolute left-0 top-[48%] w-10 -translate-y-1/2 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 top-[48%] w-8 -translate-y-1/2 text-right text-[11px] text-white/50 sm:w-12 sm:text-xs">
                                     25
                                   </div>
-                                  <div className="absolute left-0 bottom-11 w-10 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 bottom-11 w-8 text-right text-[11px] text-white/50 sm:w-12 sm:text-xs">
                                     0
                                   </div>
 
                                   {nPlotPoints.length > 0 && (
                                     <svg
                                       viewBox="0 0 100 100"
-                                      className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
+                                      className="pointer-events-none absolute left-10 right-4 top-4 bottom-14 h-[calc(100%-72px)] w-[calc(100%-56px)] sm:left-12 sm:right-6 sm:top-6 sm:h-[calc(100%-80px)] sm:w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
                                       {nSmoothLinePath && (
@@ -4040,7 +4204,7 @@ export default function PortalClient({
                                     </svg>
                                   )}
 
-                                  <div className="absolute left-12 right-6 top-6 bottom-14 grid grid-cols-12 gap-2">
+                                  <div className="absolute left-10 right-4 top-4 bottom-14 grid grid-cols-12 gap-1.5 sm:left-12 sm:right-6 sm:top-6 sm:gap-2">
                                     {seasonNData.rounds.map((round) => {
                                       const averageHeight = `${round.averageScore * 2}%`;
                                       const isSelected = selectedNRound === round.round;
@@ -4049,7 +4213,7 @@ export default function PortalClient({
                                           key={round.round}
                                           type="button"
                                           onClick={() => setSelectedNRound(round.round)}
-                                          className={`relative flex h-full items-end justify-center transition ${
+                                          className={`relative flex h-full items-end justify-center rounded-xl transition touch-manipulation ${
                                             isSelected ? "scale-[1.02]" : "opacity-90 hover:opacity-100"
                                           }`}
                                         >
@@ -4064,22 +4228,22 @@ export default function PortalClient({
                                     })}
                                   </div>
 
-                                  <div className="absolute left-12 right-6 bottom-4 grid grid-cols-12 gap-2">
+                                  <div className="absolute left-10 right-4 bottom-3 grid grid-cols-12 gap-1.5 sm:left-12 sm:right-6 sm:bottom-4 sm:gap-2">
                                     {seasonNData.rounds.map((round) => (
                                       <button
                                         key={`n-label-${round.round}`}
                                         type="button"
                                         onClick={() => setSelectedNRound(round.round)}
-                                        className={`rounded-md py-1 text-center transition ${
+                                        className={`min-h-[3.25rem] rounded-lg px-1 py-2 text-center transition touch-manipulation ${
                                           selectedNRound === round.round
                                             ? "bg-white/10"
                                             : "hover:bg-white/5"
                                         }`}
                                       >
-                                        <p className="text-sm font-medium text-white/90">
+                                        <p className="text-xs font-medium text-white/90 sm:text-sm">
                                           {round.round}회
                                         </p>
-                                        <p className="text-[11px] text-white/45">
+                                        <p className="text-[10px] text-white/45 sm:text-[11px]">
                                           평균 {round.averageScore}
                                         </p>
                                       </button>
@@ -4103,7 +4267,19 @@ export default function PortalClient({
                         </CardContent>
                       </Card>
 
-                      {selectedNRoundDetail && (
+                      {seasonNLoading && !selectedNRoundDetail ? (
+                        <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                          <CardHeader>
+                            <CardTitle className="text-2xl">N시즌 상세 통계</CardTitle>
+                            <CardDescription className="text-white/55">
+                              상세 데이터를 준비하는 중입니다.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <SeasonDetailSkeleton includeNScoreRow />
+                          </CardContent>
+                        </Card>
+                      ) : !seasonNLoading && selectedNRoundDetail && (
                         <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                           <CardHeader>
                             <CardTitle className="text-2xl">
@@ -4366,19 +4542,19 @@ export default function PortalClient({
                         </Card>
                       )}
 
-                      {selectedNRoundDetail &&
+                      {!seasonNLoading && selectedNRoundDetail &&
                         renderSeasonNoteCard(`N시즌 ${selectedNRoundDetail.round}회 시험 셀프 피드백`)}
 
                       <div className="flex flex-wrap gap-3">
                         <Button
-                          className="rounded-2xl bg-white text-black hover:bg-white/90"
+                          className="h-11 rounded-2xl bg-white px-5 text-black hover:bg-white/90 touch-manipulation"
                           onClick={() => setSelectedSeason(null)}
                         >
                           시즌 다시 선택
                         </Button>
                         <Button
                           variant="secondary"
-                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          className="h-11 rounded-2xl bg-white/10 px-5 text-white hover:bg-white/20 touch-manipulation"
                           onClick={handleReturnToPortalHome}
                         >
                           처음 화면으로
@@ -4405,9 +4581,7 @@ export default function PortalClient({
                         </CardHeader>
                         <CardContent>
                           {premiumLoading ? (
-                            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-6 text-white/70">
-                              {selectedPremiumMeta?.title} 데이터를 불러오는 중...
-                            </div>
+                            <SeasonOverviewSkeleton columns={8} minWidthClass="min-w-[560px] sm:min-w-[760px]" />
                           ) : premiumError ? (
                             <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-6 text-red-200">
                               {premiumError}
@@ -4415,28 +4589,28 @@ export default function PortalClient({
                           ) : activePremiumData ? (
                             <div className="space-y-6">
                               <div className="relative overflow-x-auto">
-                                <div className="relative h-[390px] min-w-[760px] rounded-[1.5rem] border border-white/10 bg-black/20 px-6 py-6">
-                                  <div className="pointer-events-none absolute inset-x-6 top-6 bottom-14">
+                                <div className="relative h-[320px] min-w-[560px] rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 sm:h-[390px] sm:min-w-[760px] sm:px-6 sm:py-6">
+                                  <div className="pointer-events-none absolute inset-x-4 top-4 bottom-14 sm:inset-x-6 sm:top-6 sm:bottom-14">
                                     <div className="absolute inset-x-0 top-0 border-t border-white/10" />
                                     <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
                                     <div className="absolute inset-x-0 bottom-0 border-t border-white/20" />
                                     <div className="absolute inset-y-0 left-0 border-l border-white/20" />
                                   </div>
 
-                                  <div className="absolute left-0 top-5 w-10 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 top-4 w-8 text-right text-[11px] text-white/50 sm:top-5 sm:w-12 sm:text-xs">
                                     50
                                   </div>
-                                  <div className="absolute left-0 top-[48%] w-10 -translate-y-1/2 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 top-[48%] w-8 -translate-y-1/2 text-right text-[11px] text-white/50 sm:w-12 sm:text-xs">
                                     25
                                   </div>
-                                  <div className="absolute left-0 bottom-11 w-10 text-right text-xs text-white/50 sm:w-12">
+                                  <div className="absolute left-0 bottom-11 w-8 text-right text-[11px] text-white/50 sm:w-12 sm:text-xs">
                                     0
                                   </div>
 
                                   {premiumPlotPoints.length > 0 && (
                                     <svg
                                       viewBox="0 0 100 100"
-                                      className="pointer-events-none absolute left-12 right-6 top-6 bottom-14 h-[calc(100%-80px)] w-[calc(100%-72px)]"
+                                      className="pointer-events-none absolute left-10 right-4 top-4 bottom-14 h-[calc(100%-72px)] w-[calc(100%-56px)] sm:left-12 sm:right-6 sm:top-6 sm:h-[calc(100%-80px)] sm:w-[calc(100%-72px)]"
                                       preserveAspectRatio="none"
                                     >
                                       {premiumSmoothLinePath && (
@@ -4472,7 +4646,7 @@ export default function PortalClient({
                                     </svg>
                                   )}
 
-                                  <div className="absolute left-12 right-6 top-6 bottom-14 grid grid-cols-8 gap-2">
+                                  <div className="absolute left-10 right-4 top-4 bottom-14 grid grid-cols-8 gap-1.5 sm:left-12 sm:right-6 sm:top-6 sm:gap-2">
                                     {activePremiumData.rounds.map((round) => {
                                       const averageHeight = `${round.averageScore * 2}%`;
                                       const isSelected = selectedPremiumRound === round.round;
@@ -4481,12 +4655,12 @@ export default function PortalClient({
                                           key={round.round}
                                           type="button"
                                           onClick={() => setSelectedPremiumRound(round.round)}
-                                          className={`relative flex h-full items-end justify-center transition ${
+                                          className={`relative flex h-full items-end justify-center rounded-xl transition touch-manipulation ${
                                             isSelected ? "scale-[1.02]" : "opacity-90 hover:opacity-100"
                                           }`}
                                         >
                                           <div
-                                            className={`w-8 rounded-t-xl bg-white/30 transition sm:w-10 ${
+                                            className={`w-7 rounded-t-xl bg-white/30 transition sm:w-10 ${
                                               isSelected ? "ring-2 ring-sky-300/60" : ""
                                             }`}
                                             style={{ height: averageHeight }}
@@ -4496,22 +4670,22 @@ export default function PortalClient({
                                     })}
                                   </div>
 
-                                  <div className="absolute left-12 right-6 bottom-4 grid grid-cols-8 gap-2">
+                                  <div className="absolute left-10 right-4 bottom-3 grid grid-cols-8 gap-1.5 sm:left-12 sm:right-6 sm:bottom-4 sm:gap-2">
                                     {activePremiumData.rounds.map((round) => (
                                       <button
                                         key={`premium-label-${round.round}`}
                                         type="button"
                                         onClick={() => setSelectedPremiumRound(round.round)}
-                                        className={`rounded-md py-1 text-center transition ${
+                                        className={`min-h-[3.25rem] rounded-lg px-1 py-2 text-center transition touch-manipulation ${
                                           selectedPremiumRound === round.round
                                             ? "bg-white/10"
                                             : "hover:bg-white/5"
                                         }`}
                                       >
-                                        <p className="text-sm font-medium text-white/90">
+                                        <p className="text-xs font-medium text-white/90 sm:text-sm">
                                           {round.label}
                                         </p>
-                                        <p className="text-[11px] text-white/45">
+                                        <p className="text-[10px] text-white/45 sm:text-[11px]">
                                           평균 {round.averageScore}
                                         </p>
                                       </button>
@@ -4534,7 +4708,21 @@ export default function PortalClient({
                         </CardContent>
                       </Card>
 
-                      {selectedPremiumRoundDetail && (
+                      {premiumLoading && !selectedPremiumRoundDetail ? (
+                        <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
+                          <CardHeader>
+                            <CardTitle className="text-2xl">
+                              {selectedPremiumMeta?.title} 상세 통계
+                            </CardTitle>
+                            <CardDescription className="text-white/55">
+                              상세 데이터를 준비하는 중입니다.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <SeasonDetailSkeleton showQuestionTables={false} />
+                          </CardContent>
+                        </Card>
+                      ) : !premiumLoading && selectedPremiumRoundDetail && (
                         <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white shadow-2xl">
                           <CardHeader>
                             <CardTitle className="text-2xl">
@@ -4601,21 +4789,21 @@ export default function PortalClient({
                         </Card>
                       )}
 
-                      {selectedPremiumRoundDetail &&
+                      {!premiumLoading && selectedPremiumRoundDetail &&
                         renderSeasonNoteCard(
                           `${selectedPremiumMeta?.title} ${selectedPremiumRoundDetail.label} 셀프 피드백`
                         )}
 
                       <div className="flex flex-wrap gap-3">
                         <Button
-                          className="rounded-2xl bg-white text-black hover:bg-white/90"
+                          className="h-11 rounded-2xl bg-white px-5 text-black hover:bg-white/90 touch-manipulation"
                           onClick={() => setSelectedSeason(null)}
                         >
                           시즌 다시 선택
                         </Button>
                         <Button
                           variant="secondary"
-                          className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                          className="h-11 rounded-2xl bg-white/10 px-5 text-white hover:bg-white/20 touch-manipulation"
                           onClick={handleReturnToPortalHome}
                         >
                           처음 화면으로

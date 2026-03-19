@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { buildShopDeliveryScheduleText } from "@/lib/shop";
 import { SessionUser } from "@/lib/session";
 
@@ -234,6 +235,56 @@ function boxBadgeClass(code: string) {
   return "from-cyan-400/70 to-blue-200/15";
 }
 
+function ShopLoadingSkeleton({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Card
+            key={`shop-skeleton-card-${index}`}
+            className="rounded-[2rem] border border-white/10 bg-black/35 text-white shadow-xl"
+          >
+            <CardHeader className="space-y-3">
+              <Skeleton className="h-6 w-20 rounded-full" />
+              <Skeleton className="h-8 w-24" />
+              <Skeleton className="h-4 w-full" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-24 w-full rounded-2xl" />
+              <Skeleton className="h-12 w-full rounded-2xl" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white">
+        <CardHeader>
+          <Skeleton className="h-7 w-36" />
+          <Skeleton className="h-4 w-64" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={`shop-log-skeleton-${index}`} className="h-11 w-full" />
+          ))}
+        </CardContent>
+      </Card>
+
+      {isAdmin && (
+        <Card className="rounded-[2rem] border border-cyan-300/25 bg-cyan-500/10 text-white">
+          <CardHeader className="space-y-4">
+            <Skeleton className="h-7 w-40" />
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={`admin-tab-skeleton-${index}`} className="h-11 w-32 rounded-2xl" />
+              ))}
+            </div>
+          </CardHeader>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function ShopClient({ initialUser }: { initialUser: SessionUser }) {
   const [coinBalance, setCoinBalance] = useState(0);
   const [boxes, setBoxes] = useState<ShopBox[]>([]);
@@ -281,6 +332,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [deliveryUpdatingId, setDeliveryUpdatingId] = useState<number | null>(null);
   const [bgmEnabled, setBgmEnabled] = useState(true);
   const [bgmBlocked, setBgmBlocked] = useState(false);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
   const isAdmin = initialUser.role === "admin";
 
@@ -497,6 +549,15 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     } catch {
       //
     }
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px), (prefers-reduced-motion: reduce)");
+    const updateCompactViewport = () => setIsCompactViewport(mediaQuery.matches);
+
+    updateCompactViewport();
+    mediaQuery.addEventListener("change", updateCompactViewport);
+    return () => mediaQuery.removeEventListener("change", updateCompactViewport);
   }, []);
 
   useEffect(() => {
@@ -1035,7 +1096,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               </div>
               <Button
                 variant="secondary"
-                className="rounded-xl bg-white/10 text-white hover:bg-white/20"
+                className="h-11 rounded-xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
                 onClick={() => setProbabilityModalOpen(false)}
               >
                 <X className="h-4 w-4" />
@@ -1043,8 +1104,12 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             </div>
             <div className="max-h-[72vh] overflow-y-auto p-6">
               {probabilityLoading ? (
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-white/65">
-                  확률 고지표를 불러오는 중...
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="space-y-3">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
                 </div>
               ) : probabilityBoxes.length === 0 ? (
                 <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-white/65">
@@ -1115,10 +1180,10 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               상자 오픈, 코인 사용 내역, 당첨 기록이 모두 저장됩니다.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
               variant="secondary"
-              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+              className="h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
               onClick={() => {
                 const nextEnabled = !bgmEnabled;
                 setBgmEnabled(nextEnabled);
@@ -1156,7 +1221,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             <Link href={isAdmin ? "/admin" : "/"}>
               <Button
                 variant="secondary"
-                className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                className="h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
               >
                 <ArrowLeft className="mr-1 h-4 w-4" />
                 포털로 돌아가기
@@ -1164,7 +1229,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             </Link>
             <Button
               variant="secondary"
-              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+              className="h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
               onClick={() => {
                 setProbabilityModalOpen(true);
                 void fetchProbabilityTable().catch((error) => {
@@ -1176,7 +1241,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             </Button>
             <Button
               variant="secondary"
-              className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+              className="h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
               onClick={() => {
                 void fetchOverview();
                 void fetchMyLogs();
@@ -1202,7 +1267,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
 
         <div className="rounded-2xl border border-amber-200/20 bg-amber-400/10 px-4 py-3">
           <p className="text-sm text-amber-100">
-            현재 보유 코인: <span className="font-semibold">{coinBalance}</span>
+            현재 보유 코인:{" "}
+            {loading ? <Skeleton className="inline-block h-5 w-12 align-middle" /> : <span className="font-semibold">{coinBalance}</span>}
           </p>
         </div>
 
@@ -1215,14 +1281,18 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
         <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
           <p className="mb-2 text-xs text-white/60">희귀 당첨 내역</p>
           <div className="overflow-hidden whitespace-nowrap rounded-xl border border-white/10 bg-black/30 py-2">
-            <div className="marquee-track px-4 text-sm text-white/80">{`${tickerText}   ✦   ${tickerText}`}</div>
+            {loading ? (
+              <div className="px-4">
+                <Skeleton className="h-5 w-full" />
+              </div>
+            ) : (
+              <div className="marquee-track px-4 text-sm text-white/80">{`${tickerText}   ✦   ${tickerText}`}</div>
+            )}
           </div>
         </div>
 
         {loading ? (
-          <Card className="rounded-[2rem] border border-white/10 bg-white/5 text-white">
-            <CardContent className="py-8 text-center text-white/70">상점 정보를 불러오는 중...</CardContent>
-          </Card>
+          <ShopLoadingSkeleton isAdmin={isAdmin} />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {boxes.map((box) => {
@@ -1233,6 +1303,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               const canOpen = (hasTicket || coinBalance >= box.coinCost) && !soldOut && !isOpening;
               const waitingMediaSrc = BOX_VIDEO_ASSETS[box.code]?.waiting ?? null;
               const waitingIsVideo = !!waitingMediaSrc && /\.(mp4|webm|ogg)$/i.test(waitingMediaSrc);
+              const useStaticWaitingPreview = isCompactViewport && waitingIsVideo;
               const displayBoxName = getDisplayBoxName(box);
               return (
                 <Card
@@ -1257,7 +1328,15 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   <CardContent className="space-y-3">
                     <div className="relative h-24 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
                       {waitingMediaSrc ? (
-                        waitingIsVideo ? (
+                        useStaticWaitingPreview ? (
+                          <div className={`flex h-full items-center justify-center bg-gradient-to-br ${boxBadgeClass(box.code)}`}>
+                            <div className="text-center">
+                              <Gift className="mx-auto h-8 w-8 text-white/90" />
+                              <p className="mt-2 text-sm font-medium text-white/95">{displayBoxName}</p>
+                              <p className="text-[11px] text-white/70">모바일 경량 미리보기</p>
+                            </div>
+                          </div>
+                        ) : waitingIsVideo ? (
                           <video
                             key={`${box.code}-waiting`}
                             src={waitingMediaSrc}
@@ -1265,7 +1344,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                             loop
                             muted
                             playsInline
-                            preload="metadata"
+                            preload={isCompactViewport ? "none" : "metadata"}
                             className="h-24 w-full object-cover opacity-85"
                           />
                         ) : (
@@ -1291,7 +1370,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     <Button
                       onClick={() => void handleDraw(box.code)}
                       disabled={!canOpen}
-                      className="w-full rounded-2xl bg-amber-300 text-black hover:bg-amber-200 disabled:bg-white/20 disabled:text-white/50"
+                      className="h-12 w-full rounded-2xl bg-amber-300 text-base text-black hover:bg-amber-200 disabled:bg-white/20 disabled:text-white/50 touch-manipulation"
                     >
                       {soldOut
                         ? "재고 소진"
@@ -1381,8 +1460,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   variant={adminTab === "inventory" ? "default" : "secondary"}
                   className={
                     adminTab === "inventory"
-                      ? "rounded-2xl bg-white text-black hover:bg-white/90"
-                      : "rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                      ? "h-11 rounded-2xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
+                      : "h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
                   }
                   onClick={() => setAdminTab("inventory")}
                 >
@@ -1392,8 +1471,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   variant={adminTab === "studentLogs" ? "default" : "secondary"}
                   className={
                     adminTab === "studentLogs"
-                      ? "rounded-2xl bg-white text-black hover:bg-white/90"
-                      : "rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                      ? "h-11 rounded-2xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
+                      : "h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
                   }
                   onClick={() => setAdminTab("studentLogs")}
                 >
@@ -1403,8 +1482,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   variant={adminTab === "weeklyLogs" ? "default" : "secondary"}
                   className={
                     adminTab === "weeklyLogs"
-                      ? "rounded-2xl bg-white text-black hover:bg-white/90"
-                      : "rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                      ? "h-11 rounded-2xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
+                      : "h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
                   }
                   onClick={() => setAdminTab("weeklyLogs")}
                 >
@@ -1414,8 +1493,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   variant={adminTab === "coinAdjust" ? "default" : "secondary"}
                   className={
                     adminTab === "coinAdjust"
-                      ? "rounded-2xl bg-white text-black hover:bg-white/90"
-                      : "rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                      ? "h-11 rounded-2xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
+                      : "h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
                   }
                   onClick={() => setAdminTab("coinAdjust")}
                 >
@@ -1536,8 +1615,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                                     variant="secondary"
                                     className={`rounded-lg ${
                                       isApplied
-                                        ? "bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/20"
-                                        : "bg-white/10 text-white hover:bg-white/20"
+                                        ? "h-10 bg-emerald-400/20 px-4 text-emerald-100 hover:bg-emerald-400/20 touch-manipulation"
+                                        : "h-10 bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
                                     }`}
                                     disabled={isSaving || isApplied}
                                     onClick={() => void handleInventorySave(product.id)}
@@ -1597,7 +1676,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                           희귀 상품
                         </label>
                         <Button
-                          className="ml-auto rounded-xl bg-white text-black hover:bg-white/90"
+                          className="ml-auto h-11 rounded-xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
                           onClick={() => void handleAddProduct()}
                         >
                           상품 추가
@@ -1728,7 +1807,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                               {winner.canToggleDelivery ? (
                                 <Button
                                   variant="secondary"
-                                  className="rounded-lg bg-white/10 text-white hover:bg-white/20"
+                                  className="h-10 rounded-lg bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
                                   disabled={deliveryUpdatingId === winner.id}
                                   onClick={() =>
                                     void handleDeliveryToggle(winner.id, !winner.deliveryCompleted)
@@ -1794,7 +1873,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                     />
                   </div>
                   <Button
-                    className="rounded-xl bg-white text-black hover:bg-white/90"
+                    className="h-11 rounded-xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
                     onClick={() => void handleCoinAdjust()}
                   >
                     코인 즉시 반영
