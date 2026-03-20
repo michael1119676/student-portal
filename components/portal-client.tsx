@@ -1117,10 +1117,9 @@ export default function PortalClient({
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
-  const [announcementAudience, setAnnouncementAudience] = useState<
-    "all" | "students" | "admins" | "single"
-  >("all");
+  const [announcementAudience, setAnnouncementAudience] = useState<"all" | "single">("all");
   const [announcementTargetStudentId, setAnnouncementTargetStudentId] = useState("");
+  const [announcementTargetQuery, setAnnouncementTargetQuery] = useState("");
   const [announcementImportant, setAnnouncementImportant] = useState(true);
   const [announcementSaving, setAnnouncementSaving] = useState(false);
   const studentProfileCacheRef = useRef<Record<string, StudentProfile | null>>({});
@@ -1149,6 +1148,25 @@ export default function PortalClient({
           : Array.from({ length: 10 }, (_, i) => i + 1),
     [statsSeason]
   );
+
+  const selectedAnnouncementStudent = useMemo(
+    () => adminStudents.find((student) => student.id === announcementTargetStudentId) ?? null,
+    [adminStudents, announcementTargetStudentId]
+  );
+
+  const announcementTargetResults = useMemo(() => {
+    const query = announcementTargetQuery.trim();
+    if (!query) return adminStudents.slice(0, 8);
+
+    return adminStudents
+      .filter((student) => {
+        const haystack = [student.name, student.phone, student.className ?? ""]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(query.toLowerCase());
+      })
+      .slice(0, 8);
+  }, [adminStudents, announcementTargetQuery]);
 
   const canLogin = useMemo(() => {
     return (
@@ -1359,6 +1377,7 @@ export default function PortalClient({
       setAnnouncementBody("");
       setAnnouncementAudience("all");
       setAnnouncementTargetStudentId("");
+      setAnnouncementTargetQuery("");
       setAnnouncementImportant(true);
       setNotificationMessage(data.message || "공지를 등록했습니다.");
       await fetchNotifications();
@@ -1383,10 +1402,15 @@ export default function PortalClient({
   }, [managedStudents]);
 
   useEffect(() => {
-    if (announcementAudience !== "single" && announcementTargetStudentId) {
-      setAnnouncementTargetStudentId("");
+    if (announcementAudience !== "single") {
+      if (announcementTargetStudentId) {
+        setAnnouncementTargetStudentId("");
+      }
+      if (announcementTargetQuery) {
+        setAnnouncementTargetQuery("");
+      }
     }
-  }, [announcementAudience, announcementTargetStudentId]);
+  }, [announcementAudience, announcementTargetQuery, announcementTargetStudentId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2767,37 +2791,13 @@ export default function PortalClient({
                               <select
                                 value={announcementAudience}
                                 onChange={(e) =>
-                                  setAnnouncementAudience(
-                                    e.target.value as "all" | "students" | "admins" | "single"
-                                  )
+                                  setAnnouncementAudience(e.target.value as "all" | "single")
                                 }
                                 className="h-10 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white"
                               >
-                                <option value="all">전체 대상</option>
-                                <option value="students">학생 대상</option>
-                                <option value="admins">관리자 대상</option>
+                                <option value="all">전체</option>
                                 <option value="single">특정 학생</option>
                               </select>
-                              {announcementAudience === "single" ? (
-                                <select
-                                  value={announcementTargetStudentId}
-                                  onChange={(e) => setAnnouncementTargetStudentId(e.target.value)}
-                                  className="h-10 min-w-[13rem] rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white"
-                                >
-                                  <option value="">학생 선택</option>
-                                  {adminStudents.map((student) => (
-                                    <option
-                                      key={student.id}
-                                      value={student.id}
-                                      className="bg-slate-900 text-white"
-                                    >
-                                      {student.name}
-                                      {student.className ? ` · ${student.className}` : ""}
-                                      {student.phone ? ` · ${student.phone}` : ""}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : null}
                               <label className="flex items-center gap-2 text-xs text-white/75">
                                 <input
                                   type="checkbox"
@@ -2814,6 +2814,67 @@ export default function PortalClient({
                                 {announcementSaving ? "등록 중..." : "공지 등록"}
                               </Button>
                             </div>
+                            {announcementAudience === "single" ? (
+                              <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                                <div className="relative">
+                                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                                  <Input
+                                    value={announcementTargetQuery}
+                                    onChange={(e) => {
+                                      const nextValue = e.target.value;
+                                      setAnnouncementTargetQuery(nextValue);
+                                      if (
+                                        selectedAnnouncementStudent &&
+                                        nextValue !== selectedAnnouncementStudent.name
+                                      ) {
+                                        setAnnouncementTargetStudentId("");
+                                      }
+                                    }}
+                                    placeholder="학생 이름 검색"
+                                    className="h-10 rounded-xl border-white/10 bg-black/30 pl-10 text-white placeholder:text-white/35"
+                                  />
+                                </div>
+                                {selectedAnnouncementStudent ? (
+                                  <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
+                                    선택됨: {selectedAnnouncementStudent.name}
+                                    {selectedAnnouncementStudent.className
+                                      ? ` · ${selectedAnnouncementStudent.className}`
+                                      : ""}
+                                    {selectedAnnouncementStudent.phone
+                                      ? ` · ${selectedAnnouncementStudent.phone}`
+                                      : ""}
+                                  </div>
+                                ) : null}
+                                <div className="max-h-44 space-y-2 overflow-y-auto">
+                                  {announcementTargetResults.length > 0 ? (
+                                    announcementTargetResults.map((student) => (
+                                      <button
+                                        key={student.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setAnnouncementTargetStudentId(student.id);
+                                          setAnnouncementTargetQuery(student.name);
+                                        }}
+                                        className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
+                                          announcementTargetStudentId === student.id
+                                            ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-50"
+                                            : "border-white/10 bg-black/20 text-white/80 hover:bg-white/10"
+                                        }`}
+                                      >
+                                        <p className="font-medium">{student.name}</p>
+                                        <p className="mt-1 text-xs text-white/45">
+                                          {student.className || "반 미지정"} · {student.phone}
+                                        </p>
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <div className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-center text-xs text-white/45">
+                                      검색된 학생이 없습니다.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       )}

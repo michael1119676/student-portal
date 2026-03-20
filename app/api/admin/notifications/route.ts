@@ -8,7 +8,7 @@ import { createPortalNotification } from "@/lib/notifications";
 import { rejectIfCrossOrigin } from "@/lib/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const ALLOWED_AUDIENCES = new Set(["all", "students", "admins", "single"]);
+const ALLOWED_AUDIENCES = new Set(["all", "single"]);
 
 export async function POST(request: Request) {
   const originError = rejectIfCrossOrigin(request);
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
 
   const { error } = await createPortalNotification(supabase, {
     type: "announcement",
-    audience: audience as "all" | "students" | "admins" | "single",
+    audience: audience as "all" | "single",
     targetUserId: audience === "single" ? targetStudentId : null,
     title: title.slice(0, 120),
     body: message.slice(0, 4000),
