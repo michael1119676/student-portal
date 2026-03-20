@@ -25,7 +25,9 @@ export async function GET(request: Request) {
       math_subject,
       science_1,
       science_2,
-      target_university
+      target_university,
+      study_year,
+      study_place
     `
     )
     .eq("id", studentId)

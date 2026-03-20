@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
+import {
+  normalizeStudyPlace,
+  normalizeStudyYear,
+} from "@/lib/student-profile-options";
 import { rejectIfCrossOrigin } from "@/lib/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -26,6 +30,8 @@ export async function POST(request: Request) {
     science_1: body.science1 ?? null,
     science_2: body.science2 ?? null,
     target_university: body.targetUniversity ?? "seoul",
+    study_year: normalizeStudyYear(body.studyYear),
+    study_place: normalizeStudyPlace(body.studyPlace),
     updated_at: new Date().toISOString(),
   };
 

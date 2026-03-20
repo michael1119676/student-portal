@@ -1,6 +1,10 @@
 import bcrypt from "bcrypt";
 import { NextResponse } from "next/server";
 import { getSessionUserFromCookies, requireAdmin } from "@/lib/api-auth";
+import {
+  normalizeStudyPlace,
+  normalizeStudyYear,
+} from "@/lib/student-profile-options";
 import { rejectIfCrossOrigin } from "@/lib/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -34,6 +38,8 @@ export async function POST(request: Request) {
   const phone = normalizePhone(String(body.phone || ""));
   const pin = String(body.pin || "").trim();
   const classNameRaw = String(body.className || "").trim();
+  const studyYear = normalizeStudyYear(body.studyYear);
+  const studyPlace = normalizeStudyPlace(body.studyPlace);
 
   if (!name) {
     return NextResponse.json(
@@ -95,6 +101,8 @@ export async function POST(request: Request) {
       science_1: null,
       science_2: null,
       target_university: "seoul",
+      study_year: studyYear,
+      study_place: studyPlace,
       updated_at: new Date().toISOString(),
     })
     .select("id, name, phone, role, class_name")

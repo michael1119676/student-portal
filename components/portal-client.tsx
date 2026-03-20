@@ -39,6 +39,10 @@ import {
   PREMIUM_MONTH_ROUNDS,
   type PremiumSeasonCode,
 } from "@/lib/season-premium";
+import {
+  STUDY_PLACE_OPTIONS,
+  STUDY_YEAR_OPTIONS,
+} from "@/lib/student-profile-options";
 
 export type SessionUser = {
   id: string;
@@ -53,6 +57,8 @@ export type StudentProfile = {
   science_1?: string | null;
   science_2?: string | null;
   target_university?: string | null;
+  study_year?: string | null;
+  study_place?: string | null;
 };
 
 export type ManagedStudent = {
@@ -943,6 +949,18 @@ function getTargetUniversity(value?: string | null) {
   return "seoul";
 }
 
+function getStudyYearValue(value?: string | null) {
+  return value && STUDY_YEAR_OPTIONS.includes(value as (typeof STUDY_YEAR_OPTIONS)[number])
+    ? value
+    : "";
+}
+
+function getStudyPlaceValue(value?: string | null) {
+  return value && STUDY_PLACE_OPTIONS.includes(value as (typeof STUDY_PLACE_OPTIONS)[number])
+    ? value
+    : "";
+}
+
 function buildSmoothPath(points: Array<{ x: number; y: number }>) {
   if (points.length < 2) return "";
   const tension = 0.12;
@@ -1030,6 +1048,12 @@ export default function PortalClient({
   const [targetUniversity, setTargetUniversity] = useState<keyof typeof universityProfiles>(
     getTargetUniversity(initialProfile?.target_university)
   );
+  const [selectedStudyYear, setSelectedStudyYear] = useState(
+    getStudyYearValue(initialProfile?.study_year)
+  );
+  const [selectedStudyPlace, setSelectedStudyPlace] = useState(
+    getStudyPlaceValue(initialProfile?.study_place)
+  );
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [newPin, setNewPin] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
@@ -1070,6 +1094,8 @@ export default function PortalClient({
   const [newStudentPhone, setNewStudentPhone] = useState("");
   const [newStudentPin, setNewStudentPin] = useState("1111");
   const [newStudentClassName, setNewStudentClassName] = useState("");
+  const [newStudentStudyYear, setNewStudentStudyYear] = useState("");
+  const [newStudentStudyPlace, setNewStudentStudyPlace] = useState("");
   const [newStudentLoading, setNewStudentLoading] = useState(false);
   const [newStudentMessage, setNewStudentMessage] = useState("");
   const [seasonNote, setSeasonNote] = useState<SeasonNote | null>(null);
@@ -1091,7 +1117,10 @@ export default function PortalClient({
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
-  const [announcementAudience, setAnnouncementAudience] = useState<"all" | "students" | "admins">("all");
+  const [announcementAudience, setAnnouncementAudience] = useState<
+    "all" | "students" | "admins" | "single"
+  >("all");
+  const [announcementTargetStudentId, setAnnouncementTargetStudentId] = useState("");
   const [announcementImportant, setAnnouncementImportant] = useState(true);
   const [announcementSaving, setAnnouncementSaving] = useState(false);
   const studentProfileCacheRef = useRef<Record<string, StudentProfile | null>>({});
@@ -1101,6 +1130,7 @@ export default function PortalClient({
   const visibleUser = isAdminMode ? selectedStudent : sessionUser;
   const canShowStudentPortal = isAdminMode ? !!sessionUser && !!selectedStudent : isLoggedIn;
   const profile = universityProfiles[targetUniversity];
+  const selectedStudySummary = [selectedStudyYear, selectedStudyPlace].filter(Boolean).join(" · ");
   const useCompactUi = prefersReducedMotion || isCompactViewport;
   const selectedPremiumSeason = isPremiumSeason(selectedSeason) ? selectedSeason : null;
   const currentPremiumDataKey =
@@ -1298,6 +1328,11 @@ export default function PortalClient({
       return;
     }
 
+    if (announcementAudience === "single" && !announcementTargetStudentId) {
+      setNotificationMessage("알림을 받을 학생을 선택해 주세요.");
+      return;
+    }
+
     setAnnouncementSaving(true);
     try {
       const res = await fetch("/api/admin/notifications", {
@@ -1309,6 +1344,8 @@ export default function PortalClient({
           title,
           body,
           audience: announcementAudience,
+          targetStudentId:
+            announcementAudience === "single" ? announcementTargetStudentId : undefined,
           isImportant: announcementImportant,
         }),
       });
@@ -1321,6 +1358,7 @@ export default function PortalClient({
       setAnnouncementTitle("");
       setAnnouncementBody("");
       setAnnouncementAudience("all");
+      setAnnouncementTargetStudentId("");
       setAnnouncementImportant(true);
       setNotificationMessage(data.message || "공지를 등록했습니다.");
       await fetchNotifications();
@@ -1335,6 +1373,7 @@ export default function PortalClient({
     announcementAudience,
     announcementBody,
     announcementImportant,
+    announcementTargetStudentId,
     announcementTitle,
     fetchNotifications,
   ]);
@@ -1342,6 +1381,12 @@ export default function PortalClient({
   useEffect(() => {
     setAdminStudents(managedStudents);
   }, [managedStudents]);
+
+  useEffect(() => {
+    if (announcementAudience !== "single" && announcementTargetStudentId) {
+      setAnnouncementTargetStudentId("");
+    }
+  }, [announcementAudience, announcementTargetStudentId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1501,6 +1546,8 @@ export default function PortalClient({
     setSelectedScience1(profileData?.science_1 || "물리학 I");
     setSelectedScience2(profileData?.science_2 || "화학 I");
     setTargetUniversity(getTargetUniversity(profileData?.target_university));
+    setSelectedStudyYear(getStudyYearValue(profileData?.study_year));
+    setSelectedStudyPlace(getStudyPlaceValue(profileData?.study_place));
   }
 
   function handleReturnToPortalHome() {
@@ -2315,6 +2362,8 @@ export default function PortalClient({
           science1: selectedScience1,
           science2: selectedScience2,
           targetUniversity,
+          studyYear: selectedStudyYear || null,
+          studyPlace: selectedStudyPlace || null,
         }
       : {
           koreanSubject: selectedKorean,
@@ -2322,6 +2371,8 @@ export default function PortalClient({
           science1: selectedScience1,
           science2: selectedScience2,
           targetUniversity,
+          studyYear: selectedStudyYear || null,
+          studyPlace: selectedStudyPlace || null,
         };
 
     const res = await fetch(endpoint, {
@@ -2444,6 +2495,8 @@ export default function PortalClient({
     const normalizedPhone = normalizePhone(newStudentPhone);
     const pinValue = newStudentPin.trim();
     const className = newStudentClassName.trim();
+    const studyYear = newStudentStudyYear.trim();
+    const studyPlace = newStudentStudyPlace.trim();
 
     setNewStudentMessage("");
 
@@ -2472,6 +2525,8 @@ export default function PortalClient({
           phone: normalizedPhone,
           pin: pinValue,
           className,
+          studyYear,
+          studyPlace,
         }),
       });
 
@@ -2496,6 +2551,8 @@ export default function PortalClient({
       setNewStudentPhone("");
       setNewStudentPin("1111");
       setNewStudentClassName("");
+      setNewStudentStudyYear("");
+      setNewStudentStudyPlace("");
     } catch {
       setNewStudentMessage("학생 추가 중 오류가 발생했습니다.");
     } finally {
@@ -2626,6 +2683,11 @@ export default function PortalClient({
                     선택과목: {selectedKorean} / {selectedMath} / {selectedScience1},{" "}
                     {selectedScience2}
                   </p>
+                  {selectedStudySummary ? (
+                    <p className="truncate text-xs text-white/40">
+                      학년/공부 장소: {selectedStudySummary}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             )}
@@ -2706,7 +2768,7 @@ export default function PortalClient({
                                 value={announcementAudience}
                                 onChange={(e) =>
                                   setAnnouncementAudience(
-                                    e.target.value as "all" | "students" | "admins"
+                                    e.target.value as "all" | "students" | "admins" | "single"
                                   )
                                 }
                                 className="h-10 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white"
@@ -2714,7 +2776,28 @@ export default function PortalClient({
                                 <option value="all">전체 대상</option>
                                 <option value="students">학생 대상</option>
                                 <option value="admins">관리자 대상</option>
+                                <option value="single">특정 학생</option>
                               </select>
+                              {announcementAudience === "single" ? (
+                                <select
+                                  value={announcementTargetStudentId}
+                                  onChange={(e) => setAnnouncementTargetStudentId(e.target.value)}
+                                  className="h-10 min-w-[13rem] rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white"
+                                >
+                                  <option value="">학생 선택</option>
+                                  {adminStudents.map((student) => (
+                                    <option
+                                      key={student.id}
+                                      value={student.id}
+                                      className="bg-slate-900 text-white"
+                                    >
+                                      {student.name}
+                                      {student.className ? ` · ${student.className}` : ""}
+                                      {student.phone ? ` · ${student.phone}` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : null}
                               <label className="flex items-center gap-2 text-xs text-white/75">
                                 <input
                                   type="checkbox"
@@ -3296,7 +3379,7 @@ export default function PortalClient({
                       <CardHeader>
                         <CardTitle className="text-3xl">학생 추가</CardTitle>
                         <CardDescription className="text-white/55">
-                          이름/전화번호/비밀번호/반을 입력하면 즉시 계정이 생성됩니다.
+                          이름/전화번호/비밀번호/반/학년/공부 장소를 입력하면 즉시 계정이 생성됩니다.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-5">
@@ -3340,6 +3423,48 @@ export default function PortalClient({
                               placeholder="토요반 / 금요반 / 영상반"
                               className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
                             />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-white/75">학년</Label>
+                            <select
+                              value={newStudentStudyYear}
+                              onChange={(e) => setNewStudentStudyYear(e.target.value)}
+                              className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                            >
+                              <option value="" className="bg-slate-900 text-white">
+                                선택 안함
+                              </option>
+                              {STUDY_YEAR_OPTIONS.map((value) => (
+                                <option
+                                  key={value}
+                                  value={value}
+                                  className="bg-slate-900 text-white"
+                                >
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-white/75">주로 공부하는 곳</Label>
+                            <select
+                              value={newStudentStudyPlace}
+                              onChange={(e) => setNewStudentStudyPlace(e.target.value)}
+                              className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                            >
+                              <option value="" className="bg-slate-900 text-white">
+                                선택 안함
+                              </option>
+                              {STUDY_PLACE_OPTIONS.map((value) => (
+                                <option
+                                  key={value}
+                                  value={value}
+                                  className="bg-slate-900 text-white"
+                                >
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </div>
 
@@ -3836,8 +3961,8 @@ export default function PortalClient({
                           <CardDescription className="mt-2 text-white/55">
                             이름과 전화번호는 고정입니다.
                             {isAdminMode
-                              ? " 관리자는 학생의 선택과목 / 희망 대학 수정, 비밀번호 1111 초기화, 로그인 잠금 해제를 할 수 있습니다."
-                              : " 선택과목 / 희망 대학 / 비밀번호만 수정할 수 있습니다."}
+                              ? " 관리자는 학생의 선택과목 / 희망 대학 / 학년 / 공부 장소 수정, 비밀번호 1111 초기화, 로그인 잠금 해제를 할 수 있습니다."
+                              : " 선택과목 / 희망 대학 / 학년 / 공부 장소 / 비밀번호를 수정할 수 있습니다."}
                           </CardDescription>
                         </div>
                         <button
@@ -3984,6 +4109,58 @@ export default function PortalClient({
                               </option>
                             ))}
                           </select>
+                        </div>
+
+                        <div className="grid gap-5 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="studyYear" className="text-white/80">
+                              학년
+                            </Label>
+                            <select
+                              id="studyYear"
+                              value={selectedStudyYear}
+                              onChange={(e) => setSelectedStudyYear(e.target.value)}
+                              className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none"
+                            >
+                              <option value="" className="bg-slate-900 text-white">
+                                선택 안함
+                              </option>
+                              {STUDY_YEAR_OPTIONS.map((value) => (
+                                <option
+                                  key={value}
+                                  value={value}
+                                  className="bg-slate-900 text-white"
+                                >
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="studyPlace" className="text-white/80">
+                              주로 공부하는 곳
+                            </Label>
+                            <select
+                              id="studyPlace"
+                              value={selectedStudyPlace}
+                              onChange={(e) => setSelectedStudyPlace(e.target.value)}
+                              className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none"
+                            >
+                              <option value="" className="bg-slate-900 text-white">
+                                선택 안함
+                              </option>
+                              {STUDY_PLACE_OPTIONS.map((value) => (
+                                <option
+                                  key={value}
+                                  value={value}
+                                  className="bg-slate-900 text-white"
+                                >
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
 
                         {!isAdminMode && (

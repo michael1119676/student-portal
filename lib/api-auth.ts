@@ -9,6 +9,8 @@ export type StudentProfileRow = {
   science_1: string | null;
   science_2: string | null;
   target_university: string | null;
+  study_year: string | null;
+  study_place: string | null;
 };
 
 async function getSignedSessionUserFromCookies() {
@@ -77,7 +79,9 @@ export async function getStudentProfileById(
         math_subject,
         science_1,
         science_2,
-        target_university
+        target_university,
+        study_year,
+        study_place
       `
     )
     .eq("id", studentId)
