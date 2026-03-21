@@ -43,6 +43,10 @@ export type PremiumRoundDetail = {
   label: string;
   myScore: number | null;
   averageScore: number;
+  histogram: Array<{
+    label: string;
+    count: number;
+  }>;
   classStats: Array<{
     className: string;
     average: number;
@@ -67,6 +71,7 @@ export type PremiumAdminStats = {
   averageScore: number;
   maxScore: number;
   minScore: number;
+  histogram: PremiumRoundDetail["histogram"];
   classStats: PremiumRoundDetail["classStats"];
   weakQuestions: [];
 };
@@ -179,6 +184,22 @@ function buildClassStats(rows: PremiumRoundRow[]) {
   });
 }
 
+function buildHistogram(rows: PremiumRoundRow[]) {
+  const bins = Array.from({ length: 11 }, (_, i) => {
+    const start = i * 5;
+    const end = i === 10 ? 50 : start + 4;
+    return { label: `${start}-${end}`, count: 0 };
+  });
+
+  for (const row of rows) {
+    if (row.score === null) continue;
+    const idx = Math.min(Math.floor(row.score / 5), bins.length - 1);
+    bins[idx].count += 1;
+  }
+
+  return bins;
+}
+
 export function getPremiumRoundLabel(round: number) {
   return `${round}월`;
 }
@@ -228,6 +249,7 @@ export function buildPremiumViewData(
       label: getPremiumRoundLabel(round),
       myScore: myRow?.score ?? null,
       averageScore,
+      histogram: buildHistogram(rows),
       classStats: buildClassStats(rows),
     });
   }
@@ -258,6 +280,7 @@ export function buildPremiumAdminStats(
         : 0,
     maxScore: validScores.length > 0 ? Math.max(...validScores) : 0,
     minScore: validScores.length > 0 ? Math.min(...validScores) : 0,
+    histogram: buildHistogram(rows),
     classStats: buildClassStats(rows),
     weakQuestions: [],
   };

@@ -193,6 +193,10 @@ type PremiumRoundDetail = {
   label: string;
   myScore: number | null;
   averageScore: number;
+  histogram: Array<{
+    label: string;
+    count: number;
+  }>;
   classStats: Array<{
     className: string;
     average: number;
@@ -5420,6 +5424,32 @@ export default function PortalClient({
                                 <p className="mt-2 text-3xl font-semibold">
                                   {selectedPremiumRoundDetail.averageScore}
                                 </p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <p className="mb-4 text-sm text-white/55">점수 분포 (5점 단위)</p>
+                              <div className="grid grid-cols-5 gap-3 sm:grid-cols-11">
+                                {selectedPremiumRoundDetail.histogram.map((bin) => {
+                                  const maxCount = Math.max(
+                                    ...selectedPremiumRoundDetail.histogram.map((item) => item.count),
+                                    1
+                                  );
+                                  const height = Math.max((bin.count / maxCount) * 100, 4);
+
+                                  return (
+                                    <div key={bin.label} className="flex flex-col items-center gap-2">
+                                      <div className="text-xs text-white/50">{bin.count}</div>
+                                      <div className="flex h-28 items-end">
+                                        <div
+                                          className="w-4 rounded-t bg-sky-300/70"
+                                          style={{ height: `${height}%` }}
+                                        />
+                                      </div>
+                                      <div className="text-[11px] text-white/45">{bin.label}</div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
 
