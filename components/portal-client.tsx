@@ -1007,6 +1007,126 @@ function roundToOneDecimal(value: number) {
   return Math.round(value * 10) / 10;
 }
 
+type SimpleHistogramBin = {
+  label: string;
+  count: number;
+};
+
+type RangeHistogramBin = SimpleHistogramBin & {
+  start: number;
+  end: number;
+};
+
+function parseHistogramLabelRange(label: string) {
+  const matched = label.match(/^\s*(-?\d+)\s*-\s*(-?\d+)\s*$/);
+  if (!matched) return null;
+
+  return {
+    start: Number(matched[1]),
+    end: Number(matched[2]),
+  };
+}
+
+function histogramBinContainsScore(
+  bin: SimpleHistogramBin | RangeHistogramBin,
+  score: number | null | undefined
+) {
+  if (score === null || score === undefined || !Number.isFinite(score)) return false;
+
+  if ("start" in bin && "end" in bin) {
+    return score >= bin.start && score <= bin.end;
+  }
+
+  const parsedRange = parseHistogramLabelRange(bin.label);
+  if (!parsedRange) return false;
+
+  return score >= parsedRange.start && score <= parsedRange.end;
+}
+
+function getHistogramMyBinLabel(
+  histogram: Array<SimpleHistogramBin | RangeHistogramBin>,
+  score: number | null | undefined
+) {
+  const matched = histogram.find((bin) => histogramBinContainsScore(bin, score));
+  return matched?.label ?? null;
+}
+
+function ScoreDistributionCard({
+  title,
+  histogram,
+  myScore,
+  columnsClassName,
+}: {
+  title: string;
+  histogram: Array<SimpleHistogramBin | RangeHistogramBin>;
+  myScore: number | null;
+  columnsClassName?: string;
+}) {
+  const maxCount = Math.max(...histogram.map((item) => item.count), 1);
+  const myBinLabel = getHistogramMyBinLabel(histogram, myScore);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-white/55">{title}</p>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/60">
+            전체 분포
+          </span>
+          <span className="rounded-full border border-rose-300/35 bg-rose-500/12 px-2.5 py-1 text-rose-100">
+            내 구간 {myBinLabel ?? "-"}
+          </span>
+        </div>
+      </div>
+      <div className={columnsClassName ?? "grid grid-cols-5 gap-3 sm:grid-cols-11"}>
+        {histogram.map((bin) => {
+          const height = Math.max((bin.count / maxCount) * 100, 4);
+          const isMine = histogramBinContainsScore(bin, myScore);
+
+          return (
+            <div
+              key={bin.label}
+              className={`rounded-xl px-1 py-2 transition ${
+                isMine ? "bg-rose-500/10 ring-1 ring-rose-300/30" : ""
+              }`}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className={`text-xs font-medium ${
+                    isMine ? "text-rose-100" : "text-white/50"
+                  }`}
+                >
+                  {bin.count}
+                </div>
+                <div className="flex h-28 items-end">
+                  <div
+                    className={`w-4 rounded-t transition sm:w-5 ${
+                      isMine
+                        ? "bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.28)]"
+                        : "bg-sky-300/70"
+                    }`}
+                    style={{ height: `${height}%` }}
+                  />
+                </div>
+                <div
+                  className={`text-[11px] ${
+                    isMine ? "font-semibold text-rose-100" : "text-white/45"
+                  }`}
+                >
+                  {bin.label}
+                </div>
+                <div className="min-h-[1rem] text-[10px]">
+                  {isMine ? <span className="text-rose-200">내 위치</span> : null}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function getTopWrongQuestions(questionStats: StudentQuestionStatRow[]) {
   return [...questionStats]
     .filter((question) => question.correctChoice !== null)
@@ -1470,6 +1590,17 @@ export default function PortalClient({
       window.removeEventListener("keydown", handleEscape);
     };
   }, [notificationCenterOpen]);
+
+  useEffect(() => {
+    if (!useCompactUi || !notificationCenterOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [notificationCenterOpen, useCompactUi]);
 
   const selectedRoundDetail = useMemo(() => {
     if (!seasonCData || selectedRound === null) return null;
@@ -2744,7 +2875,13 @@ export default function PortalClient({
                   </Button>
 
                   {notificationCenterOpen && (
-                    <div className="absolute right-0 top-full z-50 mt-3 w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-[1.6rem] border border-white/10 bg-[#0b0d12]/95 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                    <div
+                      className={`z-50 overflow-hidden rounded-[1.6rem] border border-white/10 bg-[#0b0d12]/95 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl ${
+                        useCompactUi
+                          ? "fixed inset-x-3 bottom-4 top-20"
+                          : "absolute right-0 top-full mt-3 w-[min(420px,calc(100vw-2rem))]"
+                      }`}
+                    >
                       <div className="border-b border-white/10 px-4 py-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -2763,6 +2900,15 @@ export default function PortalClient({
                               <CheckCheck className="mr-1 h-3.5 w-3.5" />
                               모두 읽음
                             </Button>
+                            {useCompactUi ? (
+                              <Button
+                                variant="secondary"
+                                className="h-9 rounded-xl bg-white/10 px-3 text-xs text-white hover:bg-white/20 touch-manipulation"
+                                onClick={() => setNotificationCenterOpen(false)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                         {notificationMessage && (
@@ -2883,7 +3029,11 @@ export default function PortalClient({
                         </div>
                       )}
 
-                      <div className="max-h-[min(62vh,540px)] overflow-y-auto px-3 py-3">
+                      <div
+                        className={`overflow-y-auto px-3 py-3 ${
+                          useCompactUi ? "max-h-[calc(100vh-17rem)]" : "max-h-[min(62vh,540px)]"
+                        }`}
+                      >
                         {notificationLoading && notifications.length === 0 ? (
                           <div className="space-y-3">
                             {Array.from({ length: 4 }).map((_, index) => (
@@ -4572,31 +4722,11 @@ export default function PortalClient({
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                              <p className="mb-4 text-sm text-white/55">점수 분포 (5점 단위)</p>
-                              <div className="grid grid-cols-5 gap-3 sm:grid-cols-11">
-                                {selectedRoundDetail.histogram.map((bin) => {
-                                  const maxCount = Math.max(
-                                    ...selectedRoundDetail.histogram.map((item) => item.count),
-                                    1
-                                  );
-                                  const height = Math.max((bin.count / maxCount) * 100, 4);
-
-                                  return (
-                                    <div key={bin.label} className="flex flex-col items-center gap-2">
-                                      <div className="text-xs text-white/50">{bin.count}</div>
-                                      <div className="flex h-28 items-end">
-                                        <div
-                                          className="w-4 rounded-t bg-sky-300/70"
-                                          style={{ height: `${height}%` }}
-                                        />
-                                      </div>
-                                      <div className="text-[11px] text-white/45">{bin.label}</div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                            <ScoreDistributionCard
+                              title="점수 분포 (10점 단위)"
+                              histogram={selectedRoundDetail.histogram}
+                              myScore={selectedRoundDetail.myScore}
+                            />
 
                             <div className="grid gap-4 xl:grid-cols-2">
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
@@ -5015,31 +5145,11 @@ export default function PortalClient({
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                              <p className="mb-4 text-sm text-white/55">점수 분포 (10점 단위)</p>
-                              <div className="grid grid-cols-5 gap-3 sm:grid-cols-11">
-                                {selectedNRoundDetail.histogram.map((bin) => {
-                                  const maxCount = Math.max(
-                                    ...selectedNRoundDetail.histogram.map((item) => item.count),
-                                    1
-                                  );
-                                  const height = Math.max((bin.count / maxCount) * 100, 4);
-
-                                  return (
-                                    <div key={bin.label} className="flex flex-col items-center gap-2">
-                                      <div className="text-xs text-white/50">{bin.count}</div>
-                                      <div className="flex h-28 items-end">
-                                        <div
-                                          className="w-4 rounded-t bg-sky-300/70"
-                                          style={{ height: `${height}%` }}
-                                        />
-                                      </div>
-                                      <div className="text-[11px] text-white/45">{bin.label}</div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                            <ScoreDistributionCard
+                              title="점수 분포 (5점 단위)"
+                              histogram={selectedNRoundDetail.histogram}
+                              myScore={selectedNRoundDetail.myScore}
+                            />
 
                             <div className="grid gap-4 xl:grid-cols-2">
                               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
@@ -5427,31 +5537,11 @@ export default function PortalClient({
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                              <p className="mb-4 text-sm text-white/55">점수 분포 (5점 단위)</p>
-                              <div className="grid grid-cols-5 gap-3 sm:grid-cols-11">
-                                {selectedPremiumRoundDetail.histogram.map((bin) => {
-                                  const maxCount = Math.max(
-                                    ...selectedPremiumRoundDetail.histogram.map((item) => item.count),
-                                    1
-                                  );
-                                  const height = Math.max((bin.count / maxCount) * 100, 4);
-
-                                  return (
-                                    <div key={bin.label} className="flex flex-col items-center gap-2">
-                                      <div className="text-xs text-white/50">{bin.count}</div>
-                                      <div className="flex h-28 items-end">
-                                        <div
-                                          className="w-4 rounded-t bg-sky-300/70"
-                                          style={{ height: `${height}%` }}
-                                        />
-                                      </div>
-                                      <div className="text-[11px] text-white/45">{bin.label}</div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                            <ScoreDistributionCard
+                              title="점수 분포 (5점 단위)"
+                              histogram={selectedPremiumRoundDetail.histogram}
+                              myScore={selectedPremiumRoundDetail.myScore}
+                            />
 
                             <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                               <div className="border-b border-white/10 px-4 py-3">
