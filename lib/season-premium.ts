@@ -1,6 +1,5 @@
 export const PREMIUM_MONTH_ROUNDS = [3, 4, 5, 7, 8, 9, 10, 11] as const;
-
-type PremiumMonthRound = (typeof PREMIUM_MONTH_ROUNDS)[number];
+export const EDUCATION_ASSESSMENT_MONTH_ROUNDS = [5, 6, 7, 9, 10] as const;
 
 export const PREMIUM_SEASON_META = {
   DP: {
@@ -8,12 +7,24 @@ export const PREMIUM_SEASON_META = {
     shortTitle: "더프",
     title: "더프리미엄 모의고사",
     subtitle: "월별 더프 물리학 II 통계 확인",
+    rounds: [...PREMIUM_MONTH_ROUNDS],
+    detailMode: "basic",
   },
   SP: {
     badge: "서프",
     shortTitle: "서프",
     title: "서바이벌 프로",
     subtitle: "월별 서프 물리학 II 통계 확인",
+    rounds: [...PREMIUM_MONTH_ROUNDS],
+    detailMode: "basic",
+  },
+  EA: {
+    badge: "교평",
+    shortTitle: "교평",
+    title: "교육청/평가원",
+    subtitle: "월별 교육청/평가원 물리학 II 통계 확인",
+    rounds: [...EDUCATION_ASSESSMENT_MONTH_ROUNDS],
+    detailMode: "nLike",
   },
 } as const;
 
@@ -43,6 +54,10 @@ export type PremiumRoundDetail = {
   label: string;
   myScore: number | null;
   averageScore: number;
+  myStdScore?: number | null;
+  cut1?: number | null;
+  cut2?: number | null;
+  cut3?: number | null;
   histogram: Array<{
     label: string;
     count: number;
@@ -100,6 +115,11 @@ function normalizeScore(value: number | null | undefined) {
   if (rounded < 0) return 0;
   if (rounded > 50) return 50;
   return rounded;
+}
+
+function computeStdScore(score: number | null, mean: number) {
+  if (score === null) return null;
+  return Math.round(10 * ((score - (mean - 15)) / 12) + 50);
 }
 
 function classOrder(className: string) {
@@ -205,28 +225,34 @@ export function getPremiumRoundLabel(round: number) {
 }
 
 export function isPremiumSeason(value: unknown): value is PremiumSeasonCode {
-  return value === "DP" || value === "SP";
+  return value === "DP" || value === "SP" || value === "EA";
 }
 
 export function getPremiumSeasonMeta(season: PremiumSeasonCode) {
   return PREMIUM_SEASON_META[season];
 }
 
-function normalizePremiumRound(round: number): PremiumMonthRound {
-  return PREMIUM_MONTH_ROUNDS.includes(round as PremiumMonthRound)
-    ? (round as PremiumMonthRound)
-    : PREMIUM_MONTH_ROUNDS[0];
+export function getPremiumSeasonRounds(season: PremiumSeasonCode) {
+  return [...PREMIUM_SEASON_META[season].rounds];
+}
+
+function normalizePremiumRound(season: PremiumSeasonCode, round: number) {
+  const rounds = getPremiumSeasonRounds(season);
+  return rounds.includes(Math.round(round)) ? Math.round(round) : rounds[0];
 }
 
 export function buildPremiumViewData(
   students: StudentRef[],
   records: ScoreRecord[],
-  targetStudentId: string
+  targetStudentId: string,
+  season: PremiumSeasonCode,
+  cutoffsByRound?: Record<number, { cut1: number | null; cut2: number | null; cut3: number | null }>
 ): PremiumViewData {
   const rounds: PremiumRoundSummary[] = [];
   const details: PremiumRoundDetail[] = [];
+  const seasonMeta = getPremiumSeasonMeta(season);
 
-  for (const round of PREMIUM_MONTH_ROUNDS) {
+  for (const round of getPremiumSeasonRounds(season)) {
     const rows = buildRoundRows(students, records, round);
     const validScores = rows
       .map((row) => row.score)
@@ -236,6 +262,7 @@ export function buildPremiumViewData(
         ? toOneDecimal(validScores.reduce((acc, cur) => acc + cur, 0) / validScores.length)
         : 0;
     const myRow = rows.find((row) => row.studentId === targetStudentId) ?? null;
+    const cutoff = cutoffsByRound?.[round] ?? { cut1: null, cut2: null, cut3: null };
 
     rounds.push({
       round,
@@ -249,6 +276,15 @@ export function buildPremiumViewData(
       label: getPremiumRoundLabel(round),
       myScore: myRow?.score ?? null,
       averageScore,
+      myStdScore:
+        seasonMeta.detailMode === "nLike"
+          ? computeStdScore(myRow?.score ?? null, validScores.length > 0
+              ? validScores.reduce((acc, cur) => acc + cur, 0) / validScores.length
+              : 0)
+          : null,
+      cut1: seasonMeta.detailMode === "nLike" ? cutoff.cut1 : null,
+      cut2: seasonMeta.detailMode === "nLike" ? cutoff.cut2 : null,
+      cut3: seasonMeta.detailMode === "nLike" ? cutoff.cut3 : null,
       histogram: buildHistogram(rows),
       classStats: buildClassStats(rows),
     });
@@ -263,7 +299,7 @@ export function buildPremiumAdminStats(
   round: number,
   season: PremiumSeasonCode
 ): PremiumAdminStats {
-  const safeRound = normalizePremiumRound(Math.round(round));
+  const safeRound = normalizePremiumRound(season, Math.round(round));
   const rows = buildRoundRows(students, records, safeRound);
   const validScores = rows
     .map((row) => row.score)

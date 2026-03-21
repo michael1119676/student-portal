@@ -34,9 +34,9 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   getPremiumRoundLabel,
+  getPremiumSeasonRounds,
   getPremiumSeasonMeta,
   isPremiumSeason,
-  PREMIUM_MONTH_ROUNDS,
   type PremiumSeasonCode,
 } from "@/lib/season-premium";
 import {
@@ -193,6 +193,10 @@ type PremiumRoundDetail = {
   label: string;
   myScore: number | null;
   averageScore: number;
+  myStdScore?: number | null;
+  cut1?: number | null;
+  cut2?: number | null;
+  cut3?: number | null;
   histogram: Array<{
     label: string;
     count: number;
@@ -250,6 +254,7 @@ type AdminSeasonNoteItem = SeasonNote & {
   studentName: string;
   studentPhone: string;
   className: string | null;
+  score: number | null;
 };
 
 type AdminSeasonNotesResponse = {
@@ -340,6 +345,10 @@ const seasons = [
   {
     id: "SP",
     ...getPremiumSeasonMeta("SP"),
+  },
+  {
+    id: "EA",
+    ...getPremiumSeasonMeta("EA"),
   },
 ];
 
@@ -463,6 +472,10 @@ function formatSeasonRoundLabel(
   }
 
   return `${season} 시즌 ${round}회`;
+}
+
+function formatPremiumRoundList(rounds: number[]) {
+  return rounds.map((round) => `${round}월`).join(", ");
 }
 
 function classStatOrder(className: string | null | undefined) {
@@ -1207,7 +1220,7 @@ export default function PortalClient({
   const [premiumError, setPremiumError] = useState("");
   const [premiumLoadedForKey, setPremiumLoadedForKey] = useState<string | null>(null);
   const [selectedPremiumRound, setSelectedPremiumRound] = useState<number | null>(null);
-  const [adminCutSeason, setAdminCutSeason] = useState<"N" | "M" | null>(null);
+  const [adminCutSeason, setAdminCutSeason] = useState<"N" | "M" | "EA" | null>(null);
   const [adminNInputRound, setAdminNInputRound] = useState(1);
   const [nCutInputs, setNCutInputs] = useState({ cut1: "", cut2: "", cut3: "" });
   const [nCutSaveMessage, setNCutSaveMessage] = useState("");
@@ -1263,15 +1276,22 @@ export default function PortalClient({
     selectedPremiumSeason && visibleUser?.id ? `${selectedPremiumSeason}:${visibleUser.id}` : null;
   const activePremiumData =
     currentPremiumDataKey && premiumLoadedForKey === currentPremiumDataKey ? premiumData : null;
-  const selectedPremiumMeta = selectedPremiumSeason
-    ? getPremiumSeasonMeta(selectedPremiumSeason)
-    : null;
+  const selectedPremiumMeta = useMemo(
+    () => (selectedPremiumSeason ? getPremiumSeasonMeta(selectedPremiumSeason) : null),
+    [selectedPremiumSeason]
+  );
+  const selectedPremiumRounds = useMemo(
+    () => (selectedPremiumSeason ? getPremiumSeasonRounds(selectedPremiumSeason) : []),
+    [selectedPremiumSeason]
+  );
+  const selectedPremiumRoundCount = selectedPremiumRounds.length;
+  const isNLikePremiumDetail = selectedPremiumMeta?.detailMode === "nLike";
   const statsRoundOptions = useMemo(
     () =>
       statsSeason === "N"
         ? Array.from({ length: 12 }, (_, i) => i + 1)
         : isPremiumSeason(statsSeason)
-          ? [...PREMIUM_MONTH_ROUNDS]
+          ? getPremiumSeasonRounds(statsSeason)
           : Array.from({ length: 10 }, (_, i) => i + 1),
     [statsSeason]
   );
@@ -1949,15 +1969,20 @@ export default function PortalClient({
       if (selectedPremiumRound === null) {
         const defaultRound =
           activePremiumData.rounds.find((round) => round.myScore !== null)?.round ??
-          PREMIUM_MONTH_ROUNDS[0];
-        setSelectedPremiumRound(defaultRound);
+          selectedPremiumRounds[0] ??
+          null;
+        if (defaultRound !== null) setSelectedPremiumRound(defaultRound);
       }
       return;
     }
 
     let cancelled = false;
     const apiPath =
-      selectedPremiumSeason === "SP" ? "/api/season/survival-premium" : "/api/season/premium";
+      selectedPremiumSeason === "SP"
+        ? "/api/season/survival-premium"
+        : selectedPremiumSeason === "EA"
+          ? "/api/season/education-assessment"
+          : "/api/season/premium";
     const premiumMeta = getPremiumSeasonMeta(selectedPremiumSeason);
 
     const loadPremium = async () => {
@@ -1983,8 +2008,10 @@ export default function PortalClient({
           setPremiumData(data.data);
           setPremiumLoadedForKey(currentPremiumDataKey);
           const defaultRound =
-            data.data.rounds.find((round) => round.myScore !== null)?.round ?? PREMIUM_MONTH_ROUNDS[0];
-          setSelectedPremiumRound(defaultRound);
+            data.data.rounds.find((round) => round.myScore !== null)?.round ??
+            selectedPremiumRounds[0] ??
+            null;
+          if (defaultRound !== null) setSelectedPremiumRound(defaultRound);
         }
       } catch {
         if (!cancelled) {
@@ -2013,6 +2040,7 @@ export default function PortalClient({
     currentPremiumDataKey,
     activePremiumData,
     selectedPremiumRound,
+    selectedPremiumRounds,
   ]);
 
   useEffect(() => {
@@ -3566,6 +3594,16 @@ export default function PortalClient({
                               >
                                 시즌 M
                               </Button>
+                              <Button
+                                variant="secondary"
+                                className="h-14 rounded-2xl bg-white/10 text-white hover:bg-white/20 sm:col-span-2"
+                                onClick={() => {
+                                  setAdminCutSeason("EA");
+                                  setAdminNInputRound(5);
+                                }}
+                              >
+                                교육청/평가원
+                              </Button>
                             </div>
                             <div className="flex flex-wrap gap-3">
                               <Button
@@ -3581,7 +3619,12 @@ export default function PortalClient({
                           <>
                             <div className="flex items-center justify-between">
                               <p className="text-sm text-white/70">
-                                선택 시즌: <span className="font-semibold">{adminCutSeason} 시즌</span>
+                                선택 시즌:{" "}
+                                <span className="font-semibold">
+                                  {adminCutSeason === "EA"
+                                    ? getPremiumSeasonMeta("EA").title
+                                    : `${adminCutSeason} 시즌`}
+                                </span>
                               </p>
                               <Button
                                 variant="secondary"
@@ -3602,9 +3645,12 @@ export default function PortalClient({
                                   onChange={(e) => setAdminNInputRound(Number(e.target.value))}
                                   className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
                                 >
-                                  {Array.from({ length: 12 }, (_, i) => i + 1).map((round) => (
+                                  {(adminCutSeason === "EA"
+                                    ? getPremiumSeasonRounds("EA")
+                                    : Array.from({ length: 12 }, (_, i) => i + 1)
+                                  ).map((round) => (
                                     <option key={`cut-round-${round}`} value={round}>
-                                      {round}회
+                                      {adminCutSeason === "EA" ? getPremiumRoundLabel(round) : `${round}회`}
                                     </option>
                                   ))}
                                 </select>
@@ -3653,7 +3699,10 @@ export default function PortalClient({
                               </div>
                             </div>
                             <div className="rounded-[1.2rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65">
-                              저장 위치: {adminCutSeason} 시즌 {adminNInputRound}회 전역 컷
+                              저장 위치:{" "}
+                              {adminCutSeason === "EA"
+                                ? `${getPremiumSeasonMeta("EA").title} ${getPremiumRoundLabel(adminNInputRound)} 전역 컷`
+                                : `${adminCutSeason} 시즌 ${adminNInputRound}회 전역 컷`}
                             </div>
                             <div className="flex flex-wrap gap-3">
                               <Button
@@ -3949,6 +3998,12 @@ export default function PortalClient({
                                         { longPremium: true }
                                       )}
                                     </p>
+                                    <p className="mt-2 text-sm text-white/75">
+                                      원점수:{" "}
+                                      <span className="font-semibold text-red-300">
+                                        {selectedAdminNote.score ?? "-"}
+                                      </span>
+                                    </p>
                                   </div>
 
                                   <div className="space-y-2">
@@ -4016,6 +4071,7 @@ export default function PortalClient({
                               <option value="M">M 시즌</option>
                               <option value="DP">{getPremiumSeasonMeta("DP").title}</option>
                               <option value="SP">{getPremiumSeasonMeta("SP").title}</option>
+                              <option value="EA">{getPremiumSeasonMeta("EA").title}</option>
                             </select>
                           </div>
                           <div className="space-y-2">
@@ -4615,7 +4671,7 @@ export default function PortalClient({
                       <p className="text-base text-white/55 sm:text-lg">
                         {isAdminMode
                           ? "관리자 로그인 상태로 학생 화면과 동일하게 확인할 수 있습니다."
-                          : "C 시즌 / N 시즌 / M 시즌 / 더프리미엄 모의고사 / 서바이벌 프로 중 원하는 항목을 눌러 성적 화면으로 이동할 수 있습니다."}
+                          : "C 시즌 / N 시즌 / M 시즌 / 더프리미엄 모의고사 / 서바이벌 프로 / 교육청·평가원 중 원하는 항목을 눌러 성적 화면으로 이동할 수 있습니다."}
                       </p>
                     </div>
 
@@ -5508,12 +5564,16 @@ export default function PortalClient({
                         <CardHeader>
                           <CardTitle className="text-3xl">{selectedPremiumMeta?.title}</CardTitle>
                           <CardDescription className="text-white/55">
-                            3월, 4월, 5월, 7월, 8월, 9월, 10월, 11월 {selectedPremiumMeta?.shortTitle} 물리학 II 통계를 확인할 수 있습니다.
+                            {formatPremiumRoundList(selectedPremiumRounds)}{" "}
+                            {selectedPremiumMeta?.shortTitle} 물리학 II 통계를 확인할 수 있습니다.
                           </CardDescription>
                         </CardHeader>
                         <CardContent>
                           {premiumLoading ? (
-                            <SeasonOverviewSkeleton columns={8} minWidthClass="min-w-[560px] sm:min-w-[760px]" />
+                            <SeasonOverviewSkeleton
+                              columns={selectedPremiumRoundCount || 5}
+                              minWidthClass="min-w-[560px] sm:min-w-[760px]"
+                            />
                           ) : premiumError ? (
                             <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-6 text-red-200">
                               {premiumError}
@@ -5521,7 +5581,12 @@ export default function PortalClient({
                           ) : activePremiumData ? (
                             <div className="space-y-6">
                               <div className="relative overflow-x-auto">
-                                <div className="relative h-[320px] min-w-[560px] rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 sm:h-[390px] sm:min-w-[760px] sm:px-6 sm:py-6">
+                                <div
+                                  className="relative h-[320px] rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 sm:h-[390px] sm:px-6 sm:py-6"
+                                  style={{
+                                    minWidth: `${Math.max(selectedPremiumRoundCount * 78, 560)}px`,
+                                  }}
+                                >
                                   <div className="pointer-events-none absolute inset-x-4 top-4 bottom-14 sm:inset-x-6 sm:top-6 sm:bottom-14">
                                     <div className="absolute inset-x-0 top-0 border-t border-white/10" />
                                     <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-white/10" />
@@ -5578,7 +5643,15 @@ export default function PortalClient({
                                     </svg>
                                   )}
 
-                                  <div className="absolute left-10 right-4 top-4 bottom-14 grid grid-cols-8 gap-1.5 sm:left-12 sm:right-6 sm:top-6 sm:gap-2">
+                                  <div
+                                    className="absolute left-10 right-4 top-4 bottom-14 grid gap-1.5 sm:left-12 sm:right-6 sm:top-6 sm:gap-2"
+                                    style={{
+                                      gridTemplateColumns: `repeat(${Math.max(
+                                        activePremiumData.rounds.length,
+                                        1
+                                      )}, minmax(0, 1fr))`,
+                                    }}
+                                  >
                                     {activePremiumData.rounds.map((round) => {
                                       const averageHeight = `${round.averageScore * 2}%`;
                                       const isSelected = selectedPremiumRound === round.round;
@@ -5602,7 +5675,15 @@ export default function PortalClient({
                                     })}
                                   </div>
 
-                                  <div className="absolute left-10 right-4 bottom-3 grid grid-cols-8 gap-1.5 sm:left-12 sm:right-6 sm:bottom-4 sm:gap-2">
+                                  <div
+                                    className="absolute left-10 right-4 bottom-3 grid gap-1.5 sm:left-12 sm:right-6 sm:bottom-4 sm:gap-2"
+                                    style={{
+                                      gridTemplateColumns: `repeat(${Math.max(
+                                        activePremiumData.rounds.length,
+                                        1
+                                      )}, minmax(0, 1fr))`,
+                                    }}
+                                  >
                                     {activePremiumData.rounds.map((round) => (
                                       <button
                                         key={`premium-label-${round.round}`}
@@ -5661,7 +5742,9 @@ export default function PortalClient({
                               {selectedPremiumMeta?.title} {selectedPremiumRoundDetail.label} 상세 통계
                             </CardTitle>
                             <CardDescription className="text-white/55">
-                              원점수와 반별 통계만 확인할 수 있습니다.
+                              {isNLikePremiumDetail
+                                ? "내 점수, 비교(표준점수/컷), 점수 분포, 반별 통계를 확인할 수 있습니다."
+                                : "원점수와 반별 통계만 확인할 수 있습니다."}
                             </CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-6">
@@ -5679,6 +5762,38 @@ export default function PortalClient({
                                 </p>
                               </div>
                             </div>
+
+                            {isNLikePremiumDetail && (
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="mb-3 text-sm text-white/55">비교</p>
+                                <div className="grid gap-3 sm:grid-cols-4">
+                                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                    <p className="text-xs text-white/45">내 표준점수</p>
+                                    <p className="mt-1 text-2xl font-semibold text-sky-200">
+                                      {selectedPremiumRoundDetail.myStdScore ?? "-"}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                    <p className="text-xs text-white/45">1컷</p>
+                                    <p className="mt-1 text-xl font-semibold">
+                                      {selectedPremiumRoundDetail.cut1 ?? "-"}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                    <p className="text-xs text-white/45">2컷</p>
+                                    <p className="mt-1 text-xl font-semibold">
+                                      {selectedPremiumRoundDetail.cut2 ?? "-"}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                    <p className="text-xs text-white/45">3컷</p>
+                                    <p className="mt-1 text-xl font-semibold">
+                                      {selectedPremiumRoundDetail.cut3 ?? "-"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             <ScoreDistributionCard
                               title="점수 분포 (5점 단위)"

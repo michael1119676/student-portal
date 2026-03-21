@@ -61,6 +61,7 @@ export async function GET(request: Request) {
   }
 
   const studentIds = [...new Set((noteRows ?? []).map((row) => row.student_id))];
+  const seasons = [...new Set((noteRows ?? []).map((row) => row.season))];
   const { data: students, error: studentError } = await supabase
     .from("students")
     .select("id, name, phone, class_name")
@@ -73,6 +74,19 @@ export async function GET(request: Request) {
     );
   }
 
+  const { data: scoreRows, error: scoreError } = await supabase
+    .from("exam_score_records")
+    .select("student_id, season, round, score")
+    .in("student_id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
+    .in("season", seasons.length > 0 ? seasons : ["NONE"]);
+
+  if (scoreError) {
+    return NextResponse.json(
+      { ok: false, message: "학생 성적 정보를 불러오지 못했습니다." },
+      { status: 500 }
+    );
+  }
+
   const studentMap = new Map(
     (students ?? []).map((student) => [
       student.id,
@@ -81,6 +95,12 @@ export async function GET(request: Request) {
         phone: student.phone,
         className: student.class_name,
       },
+    ])
+  );
+  const scoreMap = new Map(
+    (scoreRows ?? []).map((row) => [
+      `${row.student_id}:${row.season}:${Number(row.round)}`,
+      row.score === null ? null : Number(row.score),
     ])
   );
 
@@ -97,6 +117,8 @@ export async function GET(request: Request) {
         className: student?.className ?? null,
         season: row.season,
         round: Number(row.round),
+        score:
+          scoreMap.get(`${row.student_id}:${row.season}:${Number(row.round)}`) ?? null,
         studentNote: row.student_note,
         adminComment: row.admin_comment,
         noteUpdatedAt: row.note_updated_at,

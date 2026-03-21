@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   buildPremiumViewData,
   getPremiumSeasonMeta,
-  PREMIUM_MONTH_ROUNDS,
+  getPremiumSeasonRounds,
 } from "@/lib/season-premium";
 
 const seasonMeta = getPremiumSeasonMeta("DP");
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     .from("exam_score_records")
     .select("student_id, round, score")
     .eq("season", "DP")
-    .in("round", [...PREMIUM_MONTH_ROUNDS]);
+    .in("round", getPremiumSeasonRounds("DP"));
 
   if (recordError) {
     return NextResponse.json(
@@ -67,16 +67,17 @@ export async function GET(request: Request) {
   const data = buildPremiumViewData(
     students,
     (records ?? []) as Array<{ student_id: string; round: number; score: number | null }>,
-    targetStudentId
+    targetStudentId,
+    "DP"
   );
 
   return NextResponse.json({
     ok: true,
     season: "DP",
-    maxRound: PREMIUM_MONTH_ROUNDS.length,
+    maxRound: getPremiumSeasonRounds("DP").length,
     yMax: 50,
     binSize: 5,
-    monthRounds: [...PREMIUM_MONTH_ROUNDS],
+    monthRounds: getPremiumSeasonRounds("DP"),
     data,
   });
 }

@@ -6,8 +6,8 @@ import { buildSeasonNAdminStats } from "@/lib/season-n";
 import {
   buildPremiumAdminStats,
   getPremiumSeasonMeta,
+  getPremiumSeasonRounds,
   isPremiumSeason,
-  PREMIUM_MONTH_ROUNDS,
 } from "@/lib/season-premium";
 
 export async function GET(request: Request) {
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!["C", "N", "M", "DP", "SP"].includes(season)) {
+  if (!["C", "N", "M", "DP", "SP", "EA"].includes(season)) {
     return NextResponse.json(
       { ok: false, message: `지원하지 않는 시즌입니다: ${season}` },
       { status: 400 }
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       .from("exam_score_records")
       .select("student_id, round, score")
       .eq("season", season)
-      .in("round", [...PREMIUM_MONTH_ROUNDS]);
+      .in("round", getPremiumSeasonRounds(season));
 
     if (recordError) {
       return NextResponse.json(

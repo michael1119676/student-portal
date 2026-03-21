@@ -7,7 +7,7 @@ import {
   getPremiumSeasonRounds,
 } from "@/lib/season-premium";
 
-const seasonMeta = getPremiumSeasonMeta("SP");
+const seasonMeta = getPremiumSeasonMeta("EA");
 
 export async function GET(request: Request) {
   const user = await getSessionUserFromCookies();
@@ -51,11 +51,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 
-  const { data: records, error: recordError } = await supabase
-    .from("exam_score_records")
-    .select("student_id, round, score")
-    .eq("season", "SP")
-    .in("round", getPremiumSeasonRounds("SP"));
+  const monthRounds = getPremiumSeasonRounds("EA");
+  const [{ data: records, error: recordError }, { data: cutoffs, error: cutoffError }] =
+    await Promise.all([
+      supabase
+        .from("exam_score_records")
+        .select("student_id, round, score")
+        .eq("season", "EA")
+        .in("round", monthRounds),
+      supabase
+        .from("season_cutoffs")
+        .select("round, cut1, cut2, cut3")
+        .eq("season", "EA"),
+    ]);
 
   if (recordError) {
     return NextResponse.json(
@@ -64,20 +72,40 @@ export async function GET(request: Request) {
     );
   }
 
+  if (cutoffError) {
+    return NextResponse.json(
+      { ok: false, message: `${seasonMeta.title} 컷 정보를 불러오지 못했습니다.` },
+      { status: 500 }
+    );
+  }
+
+  const cutoffsByRound: Record<number, { cut1: number | null; cut2: number | null; cut3: number | null }> =
+    {};
+  for (const row of cutoffs ?? []) {
+    const round = Number(row.round);
+    if (!Number.isFinite(round)) continue;
+    cutoffsByRound[Math.round(round)] = {
+      cut1: row.cut1 === null ? null : Number(row.cut1),
+      cut2: row.cut2 === null ? null : Number(row.cut2),
+      cut3: row.cut3 === null ? null : Number(row.cut3),
+    };
+  }
+
   const data = buildPremiumViewData(
     students,
     (records ?? []) as Array<{ student_id: string; round: number; score: number | null }>,
     targetStudentId,
-    "SP"
+    "EA",
+    cutoffsByRound
   );
 
   return NextResponse.json({
     ok: true,
-    season: "SP",
-    maxRound: getPremiumSeasonRounds("SP").length,
+    season: "EA",
+    maxRound: monthRounds.length,
     yMax: 50,
     binSize: 5,
-    monthRounds: getPremiumSeasonRounds("SP"),
+    monthRounds,
     data,
   });
 }
