@@ -238,7 +238,8 @@ export function getPremiumSeasonRounds(season: PremiumSeasonCode) {
 
 function normalizePremiumRound(season: PremiumSeasonCode, round: number) {
   const rounds = getPremiumSeasonRounds(season);
-  return rounds.includes(Math.round(round)) ? Math.round(round) : rounds[0];
+  const safeRound = Math.round(round);
+  return rounds.some((candidate) => candidate === safeRound) ? safeRound : rounds[0];
 }
 
 export function buildPremiumViewData(
