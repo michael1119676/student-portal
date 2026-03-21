@@ -229,14 +229,28 @@ function getUpcomingSaturdayKst(value: string | Date | null | undefined, order: 
   if (Number.isNaN(date.getTime())) return null;
 
   const kstDate = new Date(date.getTime() + KST_OFFSET_MS);
-  const diff = (6 - kstDate.getUTCDay() + 7) % 7 + (order - 1) * 7;
-  const targetUtcMs =
-    Date.UTC(kstDate.getUTCFullYear(), kstDate.getUTCMonth(), kstDate.getUTCDate() + diff) -
-    KST_OFFSET_MS;
+  const saturdayDiff = (6 - kstDate.getUTCDay() + 7) % 7;
+  const candidateUtcMs =
+    Date.UTC(
+      kstDate.getUTCFullYear(),
+      kstDate.getUTCMonth(),
+      kstDate.getUTCDate() + saturdayDiff,
+      12,
+      0,
+      0
+    ) - KST_OFFSET_MS;
+
+  const firstEligibleUtcMs =
+    candidateUtcMs >= date.getTime() ? candidateUtcMs : candidateUtcMs + 7 * 24 * 60 * 60 * 1000;
+
+  const targetUtcMs = firstEligibleUtcMs + (order - 1) * 7 * 24 * 60 * 60 * 1000;
   return new Date(targetUtcMs);
 }
 
-export function formatShopDeliveryDate(value: string | Date | null | undefined) {
+export function formatShopDeliveryDate(
+  value: string | Date | null | undefined,
+  options?: { includeTime?: boolean }
+) {
   if (!value) return "-";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
@@ -247,6 +261,13 @@ export function formatShopDeliveryDate(value: string | Date | null | undefined) 
     month: "2-digit",
     day: "2-digit",
     weekday: "short",
+    ...(options?.includeTime
+      ? {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }
+      : {}),
   }).format(date);
 }
 
@@ -266,7 +287,7 @@ export function buildShopDeliveryScheduleText(options: {
 
   const targetDate = getUpcomingSaturdayKst(options.createdAt ?? null, kind === "gifticon" ? 1 : 2);
   if (!targetDate) return "-";
-  return `${formatShopDeliveryDate(targetDate)} · 지급 예정`;
+  return `${formatShopDeliveryDate(targetDate, { includeTime: true })} · 지급 예정`;
 }
 
 export function maskStudentName(name: string) {
