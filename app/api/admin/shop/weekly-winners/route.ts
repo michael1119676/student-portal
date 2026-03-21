@@ -21,13 +21,14 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const weekRaw = Number(url.searchParams.get("week") || 1);
+  const mode = String(url.searchParams.get("mode") || "all").trim().toLowerCase();
   const { week, startUtc, endUtcExclusive } = getNSeasonWeekRange(weekRaw);
 
   const supabase = createAdminClient();
   let { data, error } = await supabase
     .from("draw_logs")
     .select(
-      "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot, delivery_completed"
+      "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot, delivery_completed, coin_before, coin_after"
     )
     .gte("created_at", startUtc.toISOString())
     .lt("created_at", endUtcExclusive.toISOString())
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
     const fallback = await supabase
       .from("draw_logs")
       .select(
-        "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot"
+        "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot, coin_before, coin_after"
       )
       .gte("created_at", startUtc.toISOString())
       .lt("created_at", endUtcExclusive.toISOString())
@@ -58,32 +59,39 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     week,
+    mode: mode === "manual" ? "manual" : "all",
     range: {
       startUtc: startUtc.toISOString(),
       endUtcExclusive: endUtcExclusive.toISOString(),
     },
-    winners: (data ?? []).map((row) => ({
-      id: row.id,
-      createdAt: row.created_at,
-      boxCode: row.box_code,
-      productName: row.product_name,
-      deliveryKind: getShopProductDeliveryKind(row.product_name),
-      deliveryCompleted:
-        getShopProductDeliveryKind(row.product_name) === "instant"
-          ? true
-          : !!row.delivery_completed,
-      deliveryScheduleText: buildShopDeliveryScheduleText({
-        createdAt: row.created_at,
-        productName: row.product_name,
-        deliveryCompleted:
-          getShopProductDeliveryKind(row.product_name) === "instant"
-            ? true
-            : !!row.delivery_completed,
-      }),
-      canToggleDelivery: isShopDeliveryToggleAllowed(row.product_name),
-      studentId: row.student_id,
-      studentName: row.student_name_snapshot,
-      studentPhone: row.student_phone_snapshot,
-    })),
+    winners: (data ?? [])
+      .map((row) => {
+        const deliveryKind = getShopProductDeliveryKind(row.product_name);
+        const deliveryCompleted = deliveryKind === "instant" ? true : !!row.delivery_completed;
+        const canToggleDelivery = isShopDeliveryToggleAllowed(row.product_name);
+        return {
+          id: row.id,
+          createdAt: row.created_at,
+          boxCode: row.box_code,
+          productName: row.product_name,
+          deliveryKind,
+          deliveryCompleted,
+          deliveryScheduleText: buildShopDeliveryScheduleText({
+            createdAt: row.created_at,
+            productName: row.product_name,
+            deliveryCompleted,
+          }),
+          canToggleDelivery,
+          studentId: row.student_id,
+          studentName: row.student_name_snapshot,
+          studentPhone: row.student_phone_snapshot,
+          coinBefore: "coin_before" in row ? Number((row as { coin_before?: number }).coin_before ?? 0) : 0,
+          coinAfter: "coin_after" in row ? Number((row as { coin_after?: number }).coin_after ?? 0) : 0,
+          delta:
+            ("coin_after" in row ? Number((row as { coin_after?: number }).coin_after ?? 0) : 0) -
+            ("coin_before" in row ? Number((row as { coin_before?: number }).coin_before ?? 0) : 0),
+        };
+      })
+      .filter((row) => (mode === "manual" ? row.canToggleDelivery : true)),
   });
 }

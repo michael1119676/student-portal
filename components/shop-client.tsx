@@ -100,6 +100,9 @@ type WeeklyWinner = {
   createdAt: string;
   boxCode: string;
   productName: string;
+  coinBefore: number;
+  coinAfter: number;
+  delta: number;
   deliveryKind: string;
   deliveryCompleted: boolean;
   deliveryScheduleText: string;
@@ -124,7 +127,12 @@ type ProbabilityBox = {
   products: ProbabilityProduct[];
 };
 
-type AdminPanelTab = "inventory" | "studentLogs" | "weeklyLogs" | "coinAdjust";
+type AdminPanelTab =
+  | "inventory"
+  | "studentLogs"
+  | "weeklyLogs"
+  | "manualDeliveryLogs"
+  | "coinAdjust";
 type DrawCinematicPhase = "opening" | "result";
 
 type DrawResult = {
@@ -311,6 +319,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   const [studentLogData, setStudentLogData] = useState<StudentLogResponse | null>(null);
   const [week, setWeek] = useState(1);
   const [weeklyWinners, setWeeklyWinners] = useState<WeeklyWinner[]>([]);
+  const [manualDeliveryWinners, setManualDeliveryWinners] = useState<WeeklyWinner[]>([]);
   const [inventoryBoxes, setInventoryBoxes] = useState<AdminInventoryBox[]>([]);
   const [inventoryBoxCode, setInventoryBoxCode] = useState("bronze");
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -497,16 +506,23 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
   };
 
   const fetchWeeklyWinners = useCallback(
-    async (targetWeek: number) => {
+    async (targetWeek: number, options?: { manualOnly?: boolean }) => {
       if (!isAdmin) return;
-      const res = await fetch(`/api/admin/shop/weekly-winners?week=${targetWeek}`, {
+      const query = new URLSearchParams({ week: String(targetWeek) });
+      if (options?.manualOnly) query.set("mode", "manual");
+      const res = await fetch(`/api/admin/shop/weekly-winners?${query.toString()}`, {
         cache: "no-store",
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         throw new Error(data.message || "전체 로그를 불러오지 못했습니다.");
       }
-      setWeeklyWinners((data.winners ?? []) as WeeklyWinner[]);
+      const winners = (data.winners ?? []) as WeeklyWinner[];
+      if (options?.manualOnly) {
+        setManualDeliveryWinners(winners);
+      } else {
+        setWeeklyWinners(winners);
+      }
     },
     [isAdmin]
   );
@@ -523,6 +539,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           await fetchAdminStudents();
           await fetchInventory();
           await fetchWeeklyWinners(1);
+          await fetchWeeklyWinners(1, { manualOnly: true });
         }
       } catch (error) {
         if (!cancelled) {
@@ -968,8 +985,8 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
       }
 
       setMessage(data.message || "지급 상태를 반영했습니다.");
-      setWeeklyWinners((prev) =>
-        prev.map((winner) =>
+      const updateWinnerList = (rows: WeeklyWinner[]) =>
+        rows.map((winner) =>
           winner.id !== drawLogId
             ? winner
             : {
@@ -981,15 +998,84 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   deliveryCompleted,
                 }),
               }
-        )
-      );
+        );
+      setWeeklyWinners((prev) => updateWinnerList(prev));
+      setManualDeliveryWinners((prev) => updateWinnerList(prev));
       await fetchWeeklyWinners(week);
+      await fetchWeeklyWinners(week, { manualOnly: true });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "지급 상태 수정에 실패했습니다.");
     } finally {
       setDeliveryUpdatingId(null);
     }
   };
+
+  const renderWinnerTable = (rows: WeeklyWinner[], emptyMessage: string) => (
+    <div className="overflow-x-auto rounded-2xl border border-white/10">
+      <table className="w-full min-w-[1540px] text-sm">
+        <thead className="bg-black/40 text-white/65">
+          <tr>
+            <th className="px-3 py-2 text-left">날짜/시간</th>
+            <th className="px-3 py-2 text-left">상자 종류</th>
+            <th className="px-3 py-2 text-left">당첨 상품</th>
+            <th className="px-3 py-2 text-left">당첨자 이름</th>
+            <th className="px-3 py-2 text-left">당첨자 전화번호</th>
+            <th className="px-3 py-2 text-left">전 코인</th>
+            <th className="px-3 py-2 text-left">후 코인</th>
+            <th className="px-3 py-2 text-left">변화량</th>
+            <th className="px-3 py-2 text-left">지급 일정</th>
+            <th className="px-3 py-2 text-left">처리</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((winner) => (
+            <tr key={winner.id} className="border-t border-white/10">
+              <td className="px-3 py-2">{formatKst(winner.createdAt)}</td>
+              <td className="px-3 py-2">
+                {BOX_CODE_TO_KO_NAME[winner.boxCode] ?? winner.boxCode.toUpperCase()}
+              </td>
+              <td className="px-3 py-2">{winner.productName}</td>
+              <td className="px-3 py-2">{winner.studentName}</td>
+              <td className="px-3 py-2">{winner.studentPhone}</td>
+              <td className="px-3 py-2">{winner.coinBefore}</td>
+              <td className="px-3 py-2">{winner.coinAfter}</td>
+              <td className="px-3 py-2">
+                {winner.delta > 0 ? `+${winner.delta}` : winner.delta}
+              </td>
+              <td className="px-3 py-2">{winner.deliveryScheduleText}</td>
+              <td className="px-3 py-2">
+                {winner.canToggleDelivery ? (
+                  <Button
+                    variant="secondary"
+                    className="h-10 rounded-lg bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
+                    disabled={deliveryUpdatingId === winner.id}
+                    onClick={() =>
+                      void handleDeliveryToggle(winner.id, !winner.deliveryCompleted)
+                    }
+                  >
+                    {deliveryUpdatingId === winner.id
+                      ? "처리 중..."
+                      : winner.deliveryCompleted
+                        ? "지급 취소"
+                        : "지급 처리"}
+                  </Button>
+                ) : (
+                  <span className="text-white/45">자동 지급</span>
+                )}
+              </td>
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={10} className="px-3 py-4 text-center text-white/55">
+                {emptyMessage}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   const cinematicBoxName = drawCinematic
     ? boxNameMap[drawCinematic.boxCode] ??
@@ -1490,6 +1576,17 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                   전체 로그 보기
                 </Button>
                 <Button
+                  variant={adminTab === "manualDeliveryLogs" ? "default" : "secondary"}
+                  className={
+                    adminTab === "manualDeliveryLogs"
+                      ? "h-11 rounded-2xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
+                      : "h-11 rounded-2xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
+                  }
+                  onClick={() => setAdminTab("manualDeliveryLogs")}
+                >
+                  수동 지급 로그
+                </Button>
+                <Button
                   variant={adminTab === "coinAdjust" ? "default" : "secondary"}
                   className={
                     adminTab === "coinAdjust"
@@ -1759,7 +1856,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                 </div>
               )}
 
-              {adminTab === "weeklyLogs" && (
+              {(adminTab === "weeklyLogs" || adminTab === "manualDeliveryLogs") && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <Label className="text-white/80">N 시즌 주차 선택</Label>
@@ -1769,6 +1866,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         const nextWeek = Number(e.target.value);
                         setWeek(nextWeek);
                         void fetchWeeklyWinners(nextWeek);
+                        void fetchWeeklyWinners(nextWeek, { manualOnly: true });
                       }}
                       className="h-11 rounded-xl border border-white/15 bg-black/30 px-3 text-white"
                     >
@@ -1779,62 +1877,12 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                       ))}
                     </select>
                   </div>
-                  <div className="overflow-x-auto rounded-2xl border border-white/10">
-                    <table className="w-full min-w-[1220px] text-sm">
-                      <thead className="bg-black/40 text-white/65">
-                        <tr>
-                          <th className="px-3 py-2 text-left">날짜/시간</th>
-                          <th className="px-3 py-2 text-left">상자 종류</th>
-                          <th className="px-3 py-2 text-left">당첨 상품</th>
-                          <th className="px-3 py-2 text-left">당첨자 이름</th>
-                          <th className="px-3 py-2 text-left">당첨자 전화번호</th>
-                          <th className="px-3 py-2 text-left">지급 일정</th>
-                          <th className="px-3 py-2 text-left">처리</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {weeklyWinners.map((winner) => (
-                          <tr key={winner.id} className="border-t border-white/10">
-                            <td className="px-3 py-2">{formatKst(winner.createdAt)}</td>
-                            <td className="px-3 py-2">
-                              {BOX_CODE_TO_KO_NAME[winner.boxCode] ?? winner.boxCode.toUpperCase()}
-                            </td>
-                            <td className="px-3 py-2">{winner.productName}</td>
-                            <td className="px-3 py-2">{winner.studentName}</td>
-                            <td className="px-3 py-2">{winner.studentPhone}</td>
-                            <td className="px-3 py-2">{winner.deliveryScheduleText}</td>
-                            <td className="px-3 py-2">
-                              {winner.canToggleDelivery ? (
-                                <Button
-                                  variant="secondary"
-                                  className="h-10 rounded-lg bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
-                                  disabled={deliveryUpdatingId === winner.id}
-                                  onClick={() =>
-                                    void handleDeliveryToggle(winner.id, !winner.deliveryCompleted)
-                                  }
-                                >
-                                  {deliveryUpdatingId === winner.id
-                                    ? "처리 중..."
-                                    : winner.deliveryCompleted
-                                      ? "지급 취소"
-                                      : "지급 처리"}
-                                </Button>
-                              ) : (
-                                <span className="text-white/45">자동 지급</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                        {!weeklyWinners.length && (
-                          <tr>
-                            <td colSpan={7} className="px-3 py-4 text-center text-white/55">
-                              선택한 주차의 당첨 기록이 없습니다.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                  {adminTab === "weeklyLogs"
+                    ? renderWinnerTable(weeklyWinners, "선택한 주차의 당첨 기록이 없습니다.")
+                    : renderWinnerTable(
+                        manualDeliveryWinners,
+                        "선택한 주차의 수동 지급 대상 로그가 없습니다."
+                      )}
                 </div>
               )}
 
