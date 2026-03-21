@@ -409,6 +409,8 @@ const subjectOptions = {
   ],
 };
 
+const ADMIN_CLASS_OPTIONS = ["금요일반", "토요일반", "영상반"] as const;
+
 const quickLinks = [
   {
     title: "Instagram",
@@ -1178,6 +1180,7 @@ export default function PortalClient({
   const [selectedStudyPlace, setSelectedStudyPlace] = useState(
     getStudyPlaceValue(initialProfile?.study_place)
   );
+  const [adminClassName, setAdminClassName] = useState("");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [newPin, setNewPin] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
@@ -1708,6 +1711,11 @@ export default function PortalClient({
     setSelectedStudyYear(getStudyYearValue(profileData?.study_year));
     setSelectedStudyPlace(getStudyPlaceValue(profileData?.study_place));
   }
+
+  useEffect(() => {
+    if (!isAdminMode) return;
+    setAdminClassName(selectedStudent?.className ?? "");
+  }, [isAdminMode, selectedStudent?.id, selectedStudent?.className]);
 
   function handleReturnToPortalHome() {
     setSelectedSeason(null);
@@ -2523,6 +2531,7 @@ export default function PortalClient({
           targetUniversity,
           studyYear: selectedStudyYear || null,
           studyPlace: selectedStudyPlace || null,
+          className: adminClassName,
         }
       : {
           koreanSubject: selectedKorean,
@@ -2533,6 +2542,11 @@ export default function PortalClient({
           studyYear: selectedStudyYear || null,
           studyPlace: selectedStudyPlace || null,
         };
+
+    if (isAdminMode && !selectedStudent) {
+      setSaveMessage("학생 정보가 선택되지 않았습니다.");
+      return;
+    }
 
     const res = await fetch(endpoint, {
       method: "POST",
@@ -2547,6 +2561,26 @@ export default function PortalClient({
     if (!res.ok) {
       setSaveMessage(data.message || "저장 실패");
       return;
+    }
+
+    if (isAdminMode && data.student) {
+      const updatedStudent = data.student as ManagedStudent;
+      setAdminStudents((prev) =>
+        prev
+          .map((student) => (student.id === updatedStudent.id ? updatedStudent : student))
+          .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"))
+      );
+      setSelectedStudent(updatedStudent);
+      setAdminClassName(updatedStudent.className ?? "");
+      setSeasonCData(null);
+      setSeasonCLoadedForId(null);
+      setSelectedRound(null);
+      setSeasonNData(null);
+      setSeasonNLoadedForId(null);
+      setSelectedNRound(null);
+      setPremiumData(null);
+      setPremiumLoadedForKey(null);
+      setSelectedPremiumRound(null);
     }
 
     if (!isAdminMode && nextPin) {
@@ -2572,6 +2606,52 @@ export default function PortalClient({
     }
 
     setSaveMessage("저장 완료");
+  }
+
+  async function handleDeleteStudent() {
+    if (!selectedStudent) return;
+
+    const confirmMessage = `${selectedStudent.name} 학생 계정을 삭제 처리할까요?\n로그인과 관리자 목록에서는 숨겨지지만, 기존 성적/메모/상점 기록은 유지되어 통계에는 계속 반영됩니다.`;
+    if (typeof window !== "undefined" && !window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setSaveMessage("");
+
+    const res = await fetch("/api/admin/student", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        studentId: selectedStudent.id,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setSaveMessage(data.message || "학생 삭제에 실패했습니다.");
+      return;
+    }
+
+    delete studentProfileCacheRef.current[selectedStudent.id];
+    setAdminStudents((prev) => prev.filter((student) => student.id !== selectedStudent.id));
+    setSelectedStudent(null);
+    setSelectedSeason(null);
+    setAdminStep("search");
+    setIsEditingProfile(false);
+    setSeasonCData(null);
+    setSeasonCLoadedForId(null);
+    setSelectedRound(null);
+    setSeasonNData(null);
+    setSeasonNLoadedForId(null);
+    setSelectedNRound(null);
+    setPremiumData(null);
+    setPremiumLoadedForKey(null);
+    setSelectedPremiumRound(null);
+    setSeasonNote(null);
+    setSaveMessage(data.message || "학생 계정을 삭제했습니다.");
   }
 
   async function handleResetStudentPin() {
@@ -2641,8 +2721,18 @@ export default function PortalClient({
 
     studentProfileCacheRef.current[student.id] =
       (data.profile as StudentProfile | undefined) ?? null;
+    const refreshedStudent = data.student
+      ? ({
+          ...student,
+          className: data.student.className ?? student.className ?? null,
+        } as ManagedStudent)
+      : student;
+    setAdminStudents((prev) =>
+      prev.map((target) => (target.id === refreshedStudent.id ? refreshedStudent : target))
+    );
     pushPortalHistoryEntry();
-    setSelectedStudent(student);
+    setSelectedStudent(refreshedStudent);
+    setAdminClassName(refreshedStudent.className ?? "");
     applyProfile(data.profile as StudentProfile | undefined);
     setSelectedSeason(null);
     setAdminStep("search");
@@ -2723,6 +2813,7 @@ export default function PortalClient({
     setIsEditingProfile(false);
     setSaveMessage("");
     setNewPin("");
+    setAdminClassName(selectedStudent?.className ?? "");
   }
 
   function renderSeasonNoteCard(title: string) {
@@ -3632,12 +3723,24 @@ export default function PortalClient({
                           </div>
                           <div className="space-y-2">
                             <Label className="text-white/75">반</Label>
-                            <Input
+                            <select
                               value={newStudentClassName}
                               onChange={(e) => setNewStudentClassName(e.target.value)}
-                              placeholder="토요반 / 금요반 / 영상반"
-                              className="h-11 rounded-xl border-white/10 bg-black/30 text-white"
-                            />
+                              className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                            >
+                              <option value="" className="bg-slate-900 text-white">
+                                선택 안함
+                              </option>
+                              {ADMIN_CLASS_OPTIONS.map((value) => (
+                                <option
+                                  key={value}
+                                  value={value}
+                                  className="bg-slate-900 text-white"
+                                >
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-white/75">학년</Label>
@@ -4176,7 +4279,7 @@ export default function PortalClient({
                           <CardDescription className="mt-2 text-white/55">
                             이름과 전화번호는 고정입니다.
                             {isAdminMode
-                              ? " 관리자는 학생의 선택과목 / 희망 대학 / 학년 / 공부 장소 수정, 비밀번호 1111 초기화, 로그인 잠금 해제를 할 수 있습니다."
+                              ? " 관리자는 학생의 반 이동, 선택과목 / 희망 대학 / 학년 / 공부 장소 수정, 비밀번호 1111 초기화, 로그인 잠금 해제, 학생 삭제를 할 수 있습니다."
                               : " 선택과목 / 희망 대학 / 학년 / 공부 장소 / 비밀번호를 수정할 수 있습니다."}
                           </CardDescription>
                         </div>
@@ -4207,6 +4310,24 @@ export default function PortalClient({
                             />
                           </div>
                         </div>
+
+                        {isAdminMode ? (
+                          <div className="space-y-2">
+                            <Label htmlFor="adminClassName" className="text-white/80">
+                              반 이동
+                            </Label>
+                            <Input
+                              id="adminClassName"
+                              value={adminClassName}
+                              onChange={(e) => setAdminClassName(e.target.value)}
+                              placeholder="예: 금요일반 / 토요일반 / 영상반"
+                              className="h-12 rounded-2xl border-white/10 bg-black/30 text-white placeholder:text-white/30"
+                            />
+                            <p className="text-xs text-white/45">
+                              비워두면 반 미지정으로 저장됩니다.
+                            </p>
+                          </div>
+                        ) : null}
 
                         <div className="grid gap-5 sm:grid-cols-2">
                           <div className="space-y-2">
@@ -4423,6 +4544,16 @@ export default function PortalClient({
                           >
                             닫기
                           </Button>
+
+                          {isAdminMode ? (
+                            <Button
+                              variant="secondary"
+                              className="rounded-2xl bg-red-500/15 text-red-100 hover:bg-red-500/25"
+                              onClick={handleDeleteStudent}
+                            >
+                              학생 삭제
+                            </Button>
+                          ) : null}
 
                           {isAdminMode ? (
                             <Button

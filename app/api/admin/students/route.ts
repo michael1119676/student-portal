@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
   const { data: existing, error: existingError } = await supabase
     .from("students")
-    .select("id")
+    .select("id, is_deleted")
     .eq("phone", phone)
     .maybeSingle();
 
@@ -80,33 +80,47 @@ export async function POST(request: Request) {
     );
   }
 
-  if (existing) {
+  if (existing && !existing.is_deleted) {
     return NextResponse.json(
       { ok: false, message: "이미 등록된 전화번호입니다." },
       { status: 409 }
     );
   }
 
-  const { data, error } = await supabase
-    .from("students")
-    .insert({
-      name,
-      phone,
-      role: "student",
-      class_name: className,
-      pin_hash: pinHash,
-      must_change_pin: false,
-      korean_subject: null,
-      math_subject: null,
-      science_1: null,
-      science_2: null,
-      target_university: "seoul",
-      study_year: studyYear,
-      study_place: studyPlace,
-      updated_at: new Date().toISOString(),
-    })
-    .select("id, name, phone, role, class_name")
-    .single();
+  const upsertPayload = {
+    name,
+    phone,
+    role: "student",
+    class_name: className,
+    pin_hash: pinHash,
+    must_change_pin: false,
+    korean_subject: null,
+    math_subject: null,
+    science_1: null,
+    science_2: null,
+    target_university: "seoul",
+    study_year: studyYear,
+    study_place: studyPlace,
+    is_deleted: false,
+    deleted_at: null,
+    deleted_by: null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const query = existing?.is_deleted
+    ? supabase
+        .from("students")
+        .update(upsertPayload)
+        .eq("id", existing.id)
+        .select("id, name, phone, role, class_name")
+        .single()
+    : supabase
+        .from("students")
+        .insert(upsertPayload)
+        .select("id, name, phone, role, class_name")
+        .single();
+
+  const { data, error } = await query;
 
   if (error || !data) {
     console.error("[admin/students] failed to create student:", error?.message || "unknown");

@@ -18,6 +18,7 @@ export default async function AdminPage() {
     .from("students")
     .select("id, name, phone, role, class_name")
     .eq("role", "student")
+    .eq("is_deleted", false)
     .order("name", { ascending: true });
 
   const managedStudents: ManagedStudent[] = (students || []).map((student) => ({

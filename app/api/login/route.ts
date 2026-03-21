@@ -123,6 +123,7 @@ export async function POST(request: Request) {
       `)
       .eq("name", name)
       .eq("phone", phone)
+      .eq("is_deleted", false)
       .limit(2);
 
     if (error) {

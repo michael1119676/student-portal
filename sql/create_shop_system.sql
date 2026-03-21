@@ -4,7 +4,10 @@
 create extension if not exists pgcrypto;
 
 alter table public.students
-  add column if not exists coin_balance integer not null default 0;
+  add column if not exists coin_balance integer not null default 0,
+  add column if not exists is_deleted boolean not null default false,
+  add column if not exists deleted_at timestamptz,
+  add column if not exists deleted_by uuid references public.students(id) on delete set null;
 
 create table if not exists public.shop_boxes (
   id uuid primary key default gen_random_uuid(),

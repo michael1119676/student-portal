@@ -32,7 +32,8 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", studentId)
-    .eq("role", "student");
+    .eq("role", "student")
+    .eq("is_deleted", false);
 
   if (error) {
     console.error("[admin/reset-pin] failed to reset pin:", error.message);

@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     .from("students")
     .select("id, name, phone, class_name, coin_balance")
     .eq("role", "student")
+    .eq("is_deleted", false)
     .order("name", { ascending: true })
     .limit(500);
 
@@ -50,4 +51,3 @@ export async function GET(request: Request) {
     })),
   });
 }
-

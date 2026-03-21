@@ -45,6 +45,7 @@ type StudentRow = {
   name: string;
   phone: string;
   role: string;
+  is_deleted?: boolean | null;
 };
 
 export async function resolveSessionUser(
@@ -53,11 +54,12 @@ export async function resolveSessionUser(
 ): Promise<SessionUser | null> {
   const { data: byId } = await supabase
     .from("students")
-    .select("id, name, phone, role")
+    .select("id, name, phone, role, is_deleted")
     .eq("id", user.id)
     .maybeSingle<StudentRow>();
 
   if (!byId) return null;
+  if (byId.is_deleted) return null;
 
   return {
     id: byId.id,

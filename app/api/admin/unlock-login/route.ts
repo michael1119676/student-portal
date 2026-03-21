@@ -42,6 +42,7 @@ export async function POST(request: Request) {
     .select("id, name, phone, role")
     .eq("id", studentId)
     .eq("role", "student")
+    .eq("is_deleted", false)
     .maybeSingle();
 
   if (error || !student) {

@@ -230,7 +230,7 @@ function buildRoundRows(round: number, rawRound: RawRound, students: StudentRef[
 
     rows.push({
       studentId: matched.id,
-      className: normalizeDisplayClassName(row.className || matched.class_name || "미분류"),
+      className: normalizeDisplayClassName(matched.class_name || row.className || "미분류"),
       score: normalizeScore(row.score),
       answers: row.answers.map((choice) => normalizeChoice(choice)),
     });

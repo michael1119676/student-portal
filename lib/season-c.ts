@@ -274,7 +274,7 @@ function buildRoundRows(
     result.push({
       studentId: matched?.id ?? null,
       name: matched?.name ?? normalizedName,
-      className: normalizeDisplayClassName(row.className || matched?.class_name || "미분류"),
+      className: normalizeDisplayClassName(matched?.class_name || row.className || "미분류"),
       score: scoreFromSheet ?? scoreFromAnswers(round, answers),
       answers,
     });
