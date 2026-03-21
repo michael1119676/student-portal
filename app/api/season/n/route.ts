@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
+import { fetchUploadedAnswerRowsByRound } from "@/lib/season-answer-responses";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonNViewData } from "@/lib/season-n";
 
@@ -61,7 +62,13 @@ export async function GET(request: Request) {
     };
   }
 
-  const data = buildSeasonNViewData(students, targetStudentId, cutoffsByRound);
+  const uploadedRowsByRound = await fetchUploadedAnswerRowsByRound("N");
+  const data = buildSeasonNViewData(
+    students,
+    targetStudentId,
+    cutoffsByRound,
+    uploadedRowsByRound
+  );
 
   return NextResponse.json({
     ok: true,

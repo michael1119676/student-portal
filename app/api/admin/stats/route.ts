@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
+import { fetchUploadedAnswerRowsByRound } from "@/lib/season-answer-responses";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonCAdminStats } from "@/lib/season-c";
 import { buildSeasonNAdminStats } from "@/lib/season-n";
@@ -78,8 +79,14 @@ export async function GET(request: Request) {
     });
   }
 
+  const uploadedRowsByRound =
+    season === "N"
+      ? await fetchUploadedAnswerRowsByRound("N")
+      : await fetchUploadedAnswerRowsByRound("C");
   const stats =
-    season === "N" ? buildSeasonNAdminStats(students, round) : buildSeasonCAdminStats(students, round);
+    season === "N"
+      ? buildSeasonNAdminStats(students, round, uploadedRowsByRound)
+      : buildSeasonCAdminStats(students, round, uploadedRowsByRound);
   return NextResponse.json({
     ok: true,
     stats,

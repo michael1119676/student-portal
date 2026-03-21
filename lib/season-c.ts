@@ -1,4 +1,5 @@
 import seasonCRoundsRaw from "@/data/season_c_rounds.json";
+import { getSeasonAnswerKey } from "@/lib/season-answer-config";
 
 type StudentRef = {
   id: string;
@@ -18,6 +19,8 @@ type RawRound = {
   questionCount: number;
   rows: RawRoundRow[];
 };
+
+export type UploadedSeasonAnswerRow = RawRoundRow;
 
 type RawSeasonCData = {
   season: "C";
@@ -103,19 +106,6 @@ export type SeasonCAdminStats = {
   }>;
 };
 
-const ANSWER_KEYS: Record<number, number[]> = {
-  1: "325454313".split("").map(Number),
-  2: "54332241131".split("").map(Number),
-  3: "53313351".split("").map(Number),
-  4: "14324354".split("").map(Number),
-  5: "42231441".split("").map(Number),
-  6: "13152152".split("").map(Number),
-  7: "44352323".split("").map(Number),
-  8: "32153441".split("").map(Number),
-  9: "15244115".split("").map(Number),
-  10: "15543544".split("").map(Number),
-};
-
 const ROUND_COUNT = 10;
 const MAX_SCORE = 100;
 const BIN_SIZE = 10;
@@ -199,7 +189,7 @@ function normalizeScore(value: number | null | undefined) {
 }
 
 function scoreFromAnswers(round: number, answers: Array<number | null>) {
-  const key = ANSWER_KEYS[round];
+  const key = getSeasonAnswerKey("C", round);
   if (!key || key.length === 0) return null;
 
   let answered = 0;
@@ -253,6 +243,10 @@ function dedupeLatestRows(rows: RawRoundRow[]) {
   }
 
   return [...latest.values()];
+}
+
+function mergeRoundRows(baseRows: RawRoundRow[], uploadedRows: RawRoundRow[]) {
+  return dedupeLatestRows([...baseRows, ...uploadedRows]);
 }
 
 function buildRoundRows(
@@ -375,7 +369,7 @@ function buildQuestionStats(
 }
 
 function getRawRound(data: RawSeasonCData, round: number): RawRound {
-  const fallbackQuestionCount = ANSWER_KEYS[round]?.length ?? 0;
+  const fallbackQuestionCount = getSeasonAnswerKey("C", round)?.length ?? 0;
   return (
     data.rounds[String(round)] ?? {
       questionCount: fallbackQuestionCount,
@@ -386,7 +380,8 @@ function getRawRound(data: RawSeasonCData, round: number): RawRound {
 
 export function buildSeasonCViewData(
   students: StudentRef[],
-  targetStudentId: string
+  targetStudentId: string,
+  uploadedRowsByRound: Record<number, RawRoundRow[]> = {}
 ) {
   const data = seasonCRoundsRaw as RawSeasonCData;
   const rounds: SeasonCRoundSummary[] = [];
@@ -394,9 +389,13 @@ export function buildSeasonCViewData(
 
   for (let round = 1; round <= ROUND_COUNT; round += 1) {
     const rawRound = getRawRound(data, round);
-    const rows = buildRoundRows(round, rawRound, students);
-    const answerKey = ANSWER_KEYS[round] ?? [];
-    const questionCount = Math.max(rawRound.questionCount, answerKey.length);
+    const mergedRound: RawRound = {
+      questionCount: rawRound.questionCount,
+      rows: mergeRoundRows(rawRound.rows, uploadedRowsByRound[round] ?? []),
+    };
+    const rows = buildRoundRows(round, mergedRound, students);
+    const answerKey = getSeasonAnswerKey("C", round) ?? [];
+    const questionCount = Math.max(mergedRound.questionCount, answerKey.length);
     const validScores = rows
       .map((row) => row.score)
       .filter((value): value is number => value !== null);
@@ -439,14 +438,19 @@ export function buildSeasonCViewData(
 
 export function buildSeasonCAdminStats(
   students: StudentRef[],
-  round: number
+  round: number,
+  uploadedRowsByRound: Record<number, RawRoundRow[]> = {}
 ): SeasonCAdminStats {
   const data = seasonCRoundsRaw as RawSeasonCData;
   const safeRound = Math.max(1, Math.min(10, Math.round(round)));
   const rawRound = getRawRound(data, safeRound);
-  const rows = buildRoundRows(safeRound, rawRound, students);
-  const answerKey = ANSWER_KEYS[safeRound] ?? [];
-  const questionCount = Math.max(rawRound.questionCount, answerKey.length);
+  const mergedRound: RawRound = {
+    questionCount: rawRound.questionCount,
+    rows: mergeRoundRows(rawRound.rows, uploadedRowsByRound[safeRound] ?? []),
+  };
+  const rows = buildRoundRows(safeRound, mergedRound, students);
+  const answerKey = getSeasonAnswerKey("C", safeRound) ?? [];
+  const questionCount = Math.max(mergedRound.questionCount, answerKey.length);
   const validScores = rows
     .map((row) => row.score)
     .filter((value): value is number => value !== null);

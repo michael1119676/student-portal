@@ -17,6 +17,7 @@ import {
   Search,
   Settings,
   Shield,
+  Upload,
   UserPlus,
   UserRound,
   X,
@@ -325,6 +326,39 @@ type AdminStatsResponse = {
       }>;
     }>;
   };
+};
+
+type AdminScoreUploadPreviewRow = {
+  rowNumber: number;
+  status: "new" | "update" | "match_failed";
+  studentId: string | null;
+  studentName: string | null;
+  phone: string | null;
+  className: string | null;
+  score: number | null;
+  sourceType: "omr_csv" | "answer_sheet_xlsx";
+  matchedBy: "phone8" | "phone4" | "name_class" | "name" | null;
+  reason: string | null;
+};
+
+type AdminScoreUploadPreview = {
+  season: "C" | "N" | "DP" | "SP" | "EA";
+  round: number;
+  fileName: string;
+  totalRows: number;
+  matchedCount: number;
+  newCount: number;
+  updateCount: number;
+  matchFailedCount: number;
+  rows: AdminScoreUploadPreviewRow[];
+};
+
+type AdminScoreUploadApplyResult = AdminScoreUploadPreview & {
+  insertedCount: number;
+  updatedCountApplied: number;
+  answerSavedCount: number;
+  awardedCoinCount: number;
+  logs: string[];
 };
 
 type PortalHistoryState = {
@@ -1225,6 +1259,14 @@ export default function PortalClient({
   const [nCutInputs, setNCutInputs] = useState({ cut1: "", cut2: "", cut3: "" });
   const [nCutSaveMessage, setNCutSaveMessage] = useState("");
   const [nCutLoading, setNCutLoading] = useState(false);
+  const [adminUploadSeason, setAdminUploadSeason] = useState<"C" | "N" | "DP" | "SP" | "EA">("N");
+  const [adminUploadRound, setAdminUploadRound] = useState(1);
+  const [adminUploadFile, setAdminUploadFile] = useState<File | null>(null);
+  const [adminUploadPreview, setAdminUploadPreview] = useState<AdminScoreUploadPreview | null>(null);
+  const [adminUploadMessage, setAdminUploadMessage] = useState("");
+  const [adminUploadLogs, setAdminUploadLogs] = useState<string[]>([]);
+  const [adminUploadPreviewLoading, setAdminUploadPreviewLoading] = useState(false);
+  const [adminUploadApplyLoading, setAdminUploadApplyLoading] = useState(false);
   const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N" | PremiumSeasonCode>("C");
   const [statsRound, setStatsRound] = useState(1);
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
@@ -1286,6 +1328,15 @@ export default function PortalClient({
   );
   const selectedPremiumRoundCount = selectedPremiumRounds.length;
   const isNLikePremiumDetail = selectedPremiumMeta?.detailMode === "nLike";
+  const adminUploadRoundOptions = useMemo(
+    () =>
+      isPremiumSeason(adminUploadSeason)
+        ? getPremiumSeasonRounds(adminUploadSeason)
+        : adminUploadSeason === "N"
+          ? Array.from({ length: 12 }, (_, i) => i + 1)
+          : Array.from({ length: 10 }, (_, i) => i + 1),
+    [adminUploadSeason]
+  );
   const statsRoundOptions = useMemo(
     () =>
       statsSeason === "N"
@@ -1322,6 +1373,12 @@ export default function PortalClient({
       /^\d{4}$/.test(pin)
     );
   }, [studentName, phone, pin]);
+
+  useEffect(() => {
+    if (!adminUploadRoundOptions.includes(adminUploadRound)) {
+      setAdminUploadRound(adminUploadRoundOptions[0] ?? 1);
+    }
+  }, [adminUploadRound, adminUploadRoundOptions]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 768px)");
@@ -2837,6 +2894,73 @@ export default function PortalClient({
     }
   }
 
+  async function submitAdminScoreUpload(mode: "preview" | "apply") {
+    if (!isAdminMode) return;
+
+    if (!adminUploadFile) {
+      setAdminUploadMessage("업로드할 파일을 먼저 선택해주세요.");
+      return;
+    }
+
+    if (mode === "apply" && !adminUploadPreview) {
+      setAdminUploadMessage("먼저 미리보기를 확인해주세요.");
+      return;
+    }
+
+    const setLoading =
+      mode === "preview" ? setAdminUploadPreviewLoading : setAdminUploadApplyLoading;
+    setLoading(true);
+    setAdminUploadMessage("");
+    if (mode === "preview") {
+      setAdminUploadLogs([]);
+      setAdminUploadPreview(null);
+    }
+
+    try {
+      const formData = new FormData();
+      formData.set("mode", mode);
+      formData.set("season", adminUploadSeason);
+      formData.set("round", String(adminUploadRound));
+      formData.set("file", adminUploadFile);
+
+      const res = await fetch("/api/admin/score-upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setAdminUploadMessage(data.message || "파일 업로드 처리에 실패했습니다.");
+        return;
+      }
+
+      if (mode === "preview") {
+        setAdminUploadPreview(data.preview as AdminScoreUploadPreview);
+        setAdminUploadMessage(data.message || "미리보기를 불러왔습니다.");
+        return;
+      }
+
+      const result = data.result as AdminScoreUploadApplyResult;
+      setAdminUploadPreview({
+        season: result.season,
+        round: result.round,
+        fileName: result.fileName,
+        totalRows: result.totalRows,
+        matchedCount: result.matchedCount,
+        newCount: result.newCount,
+        updateCount: result.updateCount,
+        matchFailedCount: result.matchFailedCount,
+        rows: result.rows,
+      });
+      setAdminUploadLogs(result.logs);
+      setAdminUploadMessage(data.message || "파일 적용이 완료되었습니다.");
+    } catch {
+      setAdminUploadMessage("파일 업로드 처리 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function closeProfileModal() {
     setIsEditingProfile(false);
     setSaveMessage("");
@@ -3725,6 +3849,227 @@ export default function PortalClient({
                         {nCutSaveMessage && (
                           <p className="text-sm text-white/65">{nCutSaveMessage}</p>
                         )}
+                        <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-black/20 p-5">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-white">
+                              <Upload className="h-4 w-4 text-cyan-300" />
+                              <p className="text-lg font-semibold">파일 업로드</p>
+                            </div>
+                            <p className="text-sm text-white/55">
+                              시즌과 회차를 선택한 뒤 `.xlsx` 또는 `.csv` 파일을 올리면
+                              미리보기 후 한 번에 성적/답안이 반영됩니다. 신규 입력만 코인
+                              +1, 수정은 코인 변화 없이 처리됩니다.
+                            </p>
+                          </div>
+
+                          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                            <div className="space-y-2">
+                              <Label className="text-white/75">업로드 시즌</Label>
+                              <select
+                                value={adminUploadSeason}
+                                onChange={(e) => {
+                                  const value = e.target.value as "C" | "N" | "DP" | "SP" | "EA";
+                                  setAdminUploadSeason(value);
+                                  setAdminUploadPreview(null);
+                                  setAdminUploadLogs([]);
+                                  setAdminUploadMessage("");
+                                }}
+                                className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                              >
+                                <option value="C" className="bg-slate-900 text-white">
+                                  C 시즌
+                                </option>
+                                <option value="N" className="bg-slate-900 text-white">
+                                  N 시즌
+                                </option>
+                                <option value="DP" className="bg-slate-900 text-white">
+                                  더프리미엄 모의고사
+                                </option>
+                                <option value="SP" className="bg-slate-900 text-white">
+                                  서바이벌 프로
+                                </option>
+                                <option value="EA" className="bg-slate-900 text-white">
+                                  교육청/평가원
+                                </option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="text-white/75">업로드 회차</Label>
+                              <select
+                                value={adminUploadRound}
+                                onChange={(e) => {
+                                  setAdminUploadRound(Number(e.target.value));
+                                  setAdminUploadPreview(null);
+                                  setAdminUploadLogs([]);
+                                  setAdminUploadMessage("");
+                                }}
+                                className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                              >
+                                {adminUploadRoundOptions.map((round) => (
+                                  <option
+                                    key={`upload-round-${adminUploadSeason}-${round}`}
+                                    value={round}
+                                    className="bg-slate-900 text-white"
+                                  >
+                                    {isPremiumSeason(adminUploadSeason)
+                                      ? getPremiumRoundLabel(round)
+                                      : `${round}회`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="text-white/75">파일 선택</Label>
+                              <Input
+                                type="file"
+                                accept=".xlsx,.xls,.csv"
+                                onChange={(e) => {
+                                  setAdminUploadFile(e.target.files?.[0] ?? null);
+                                  setAdminUploadPreview(null);
+                                  setAdminUploadLogs([]);
+                                  setAdminUploadMessage("");
+                                }}
+                                className="h-11 rounded-xl border-white/10 bg-black/30 text-white file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1 file:text-white"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <Button
+                              className="rounded-2xl bg-white text-black hover:bg-white/90"
+                              onClick={() => submitAdminScoreUpload("preview")}
+                              disabled={adminUploadPreviewLoading || adminUploadApplyLoading}
+                            >
+                              {adminUploadPreviewLoading ? "미리보기 불러오는 중..." : "업로드 미리보기"}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              className="rounded-2xl bg-cyan-400/15 text-cyan-100 hover:bg-cyan-400/20"
+                              onClick={() => submitAdminScoreUpload("apply")}
+                              disabled={
+                                !adminUploadPreview ||
+                                adminUploadPreviewLoading ||
+                                adminUploadApplyLoading
+                              }
+                            >
+                              {adminUploadApplyLoading ? "적용 중..." : "미리보기 적용"}
+                            </Button>
+                          </div>
+
+                          {adminUploadMessage && (
+                            <p className="mt-4 text-sm text-white/70">{adminUploadMessage}</p>
+                          )}
+
+                          {adminUploadPreview && (
+                            <div className="mt-5 space-y-4">
+                              <div className="grid gap-3 sm:grid-cols-4">
+                                <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3">
+                                  <p className="text-xs text-white/55">신규</p>
+                                  <p className="mt-1 text-2xl font-semibold text-emerald-200">
+                                    {adminUploadPreview.newCount}
+                                  </p>
+                                </div>
+                                <div className="rounded-2xl border border-sky-300/20 bg-sky-400/10 px-4 py-3">
+                                  <p className="text-xs text-white/55">수정</p>
+                                  <p className="mt-1 text-2xl font-semibold text-sky-200">
+                                    {adminUploadPreview.updateCount}
+                                  </p>
+                                </div>
+                                <div className="rounded-2xl border border-rose-300/20 bg-rose-400/10 px-4 py-3">
+                                  <p className="text-xs text-white/55">전화번호/학생 매칭 실패</p>
+                                  <p className="mt-1 text-2xl font-semibold text-rose-200">
+                                    {adminUploadPreview.matchFailedCount}
+                                  </p>
+                                </div>
+                                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                  <p className="text-xs text-white/55">전체 행</p>
+                                  <p className="mt-1 text-2xl font-semibold text-white">
+                                    {adminUploadPreview.totalRows}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="rounded-[1.2rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65">
+                                파일: <span className="font-semibold text-white/85">{adminUploadPreview.fileName}</span>
+                                {" · "}
+                                대상:{" "}
+                                <span className="font-semibold text-white/85">
+                                  {isPremiumSeason(adminUploadPreview.season)
+                                    ? `${getPremiumSeasonMeta(adminUploadPreview.season).title} ${getPremiumRoundLabel(adminUploadPreview.round)}`
+                                    : `${adminUploadPreview.season} 시즌 ${adminUploadPreview.round}회`}
+                                </span>
+                              </div>
+
+                              <div className="max-h-80 overflow-y-auto rounded-[1.2rem] border border-white/10">
+                                <table className="min-w-full text-sm text-white/75">
+                                  <thead className="bg-white/5 text-xs uppercase tracking-[0.2em] text-white/45">
+                                    <tr>
+                                      <th className="px-3 py-3 text-left">행</th>
+                                      <th className="px-3 py-3 text-left">상태</th>
+                                      <th className="px-3 py-3 text-left">학생</th>
+                                      <th className="px-3 py-3 text-left">반</th>
+                                      <th className="px-3 py-3 text-left">점수</th>
+                                      <th className="px-3 py-3 text-left">매칭 방식</th>
+                                      <th className="px-3 py-3 text-left">비고</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {adminUploadPreview.rows.map((row) => (
+                                      <tr
+                                        key={`upload-preview-${row.rowNumber}`}
+                                        className="border-t border-white/5 align-top"
+                                      >
+                                        <td className="px-3 py-3">{row.rowNumber}</td>
+                                        <td className="px-3 py-3">
+                                          {row.status === "new"
+                                            ? "신규"
+                                            : row.status === "update"
+                                              ? "수정"
+                                              : "실패"}
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <div>{row.studentName ?? "-"}</div>
+                                          <div className="text-xs text-white/40">{row.phone ?? ""}</div>
+                                        </td>
+                                        <td className="px-3 py-3">{row.className ?? "-"}</td>
+                                        <td className="px-3 py-3">
+                                          {row.score === null ? "-" : `${row.score}점`}
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          {row.matchedBy === "phone8"
+                                            ? "전화번호 8자리"
+                                            : row.matchedBy === "phone4"
+                                              ? "전화번호 4자리"
+                                              : row.matchedBy === "name_class"
+                                                ? "이름 + 반"
+                                                : row.matchedBy === "name"
+                                                  ? "이름"
+                                                  : "-"}
+                                        </td>
+                                        <td className="px-3 py-3 text-white/55">
+                                          {row.reason ?? "-"}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {adminUploadLogs.length > 0 && (
+                            <div className="mt-5 rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+                              <p className="text-sm font-semibold text-white">적용 결과 로그</p>
+                              <div className="mt-3 max-h-52 space-y-2 overflow-y-auto text-sm text-white/65">
+                                {adminUploadLogs.map((log, index) => (
+                                  <p key={`upload-log-${index}`}>{log}</p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   </div>
