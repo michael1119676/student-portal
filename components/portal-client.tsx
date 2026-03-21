@@ -4316,13 +4316,25 @@ export default function PortalClient({
                             <Label htmlFor="adminClassName" className="text-white/80">
                               반 이동
                             </Label>
-                            <Input
+                            <select
                               id="adminClassName"
                               value={adminClassName}
                               onChange={(e) => setAdminClassName(e.target.value)}
-                              placeholder="예: 금요일반 / 토요일반 / 영상반"
-                              className="h-12 rounded-2xl border-white/10 bg-black/30 text-white placeholder:text-white/30"
-                            />
+                              className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none"
+                            >
+                              <option value="" className="bg-slate-900 text-white">
+                                선택 안함
+                              </option>
+                              {ADMIN_CLASS_OPTIONS.map((value) => (
+                                <option
+                                  key={`admin-class-${value}`}
+                                  value={value}
+                                  className="bg-slate-900 text-white"
+                                >
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
                             <p className="text-xs text-white/45">
                               비워두면 반 미지정으로 저장됩니다.
                             </p>
