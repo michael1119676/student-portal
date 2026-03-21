@@ -949,6 +949,10 @@ declare
   v_before integer;
   v_after integer;
 begin
+  if upper(coalesce(new.season, '')) = 'SP' then
+    return new;
+  end if;
+
   select coin_balance
   into v_before
   from public.students

@@ -122,6 +122,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const awardedCoin = season !== "SP";
+
   await supabase.from("admin_action_logs").insert({
     admin_id: user.id,
     action_type: "score_record_insert",
@@ -147,7 +149,9 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     created: true,
-    awardedCoin: true,
-    message: "성적 레코드를 신규 입력했습니다. 코인 +1이 자동 지급됩니다.",
+    awardedCoin,
+    message: awardedCoin
+      ? "성적 레코드를 신규 입력했습니다. 코인 +1이 자동 지급됩니다."
+      : "성적 레코드를 신규 입력했습니다. 서프는 코인이 자동 지급되지 않습니다.",
   });
 }
