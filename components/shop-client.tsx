@@ -100,6 +100,7 @@ type WeeklyWinner = {
   createdAt: string;
   boxCode: string;
   productName: string;
+  className: string | null;
   coinBefore: number;
   coinAfter: number;
   delta: number;
@@ -1020,6 +1021,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             <th className="px-3 py-2 text-left">당첨 상품</th>
             <th className="px-3 py-2 text-left">당첨자 이름</th>
             <th className="px-3 py-2 text-left">당첨자 전화번호</th>
+            <th className="px-3 py-2 text-left">반</th>
             <th className="px-3 py-2 text-left">전 코인</th>
             <th className="px-3 py-2 text-left">후 코인</th>
             <th className="px-3 py-2 text-left">변화량</th>
@@ -1037,6 +1039,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
               <td className="px-3 py-2">{winner.productName}</td>
               <td className="px-3 py-2">{winner.studentName}</td>
               <td className="px-3 py-2">{winner.studentPhone}</td>
+              <td className="px-3 py-2">{winner.className || "-"}</td>
               <td className="px-3 py-2">{winner.coinBefore}</td>
               <td className="px-3 py-2">{winner.coinAfter}</td>
               <td className="px-3 py-2">
@@ -1067,7 +1070,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           ))}
           {!rows.length && (
             <tr>
-              <td colSpan={10} className="px-3 py-4 text-center text-white/55">
+              <td colSpan={11} className="px-3 py-4 text-center text-white/55">
                 {emptyMessage}
               </td>
             </tr>

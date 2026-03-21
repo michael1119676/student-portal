@@ -12,6 +12,12 @@ import {
 } from "@/lib/shop";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+function normalizeClassName(value: string | null | undefined) {
+  const normalized = String(value || "").trim();
+  if (normalized === "녹화강의반" || normalized === "영상반") return "영상반";
+  return normalized || null;
+}
+
 export async function GET(request: Request) {
   const user = await getSessionUserFromCookies();
   if (!user) return unauthorizedResponse();
@@ -56,6 +62,16 @@ export async function GET(request: Request) {
     );
   }
 
+  const studentIds = [...new Set((data ?? []).map((row) => row.student_id).filter(Boolean))];
+  const { data: students } = await supabase
+    .from("students")
+    .select("id, class_name")
+    .in("id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
+
+  const classNameByStudentId = new Map(
+    (students ?? []).map((student) => [student.id, normalizeClassName(student.class_name)])
+  );
+
   return NextResponse.json({
     ok: true,
     week,
@@ -85,6 +101,7 @@ export async function GET(request: Request) {
           studentId: row.student_id,
           studentName: row.student_name_snapshot,
           studentPhone: row.student_phone_snapshot,
+          className: classNameByStudentId.get(row.student_id) ?? null,
           coinBefore: "coin_before" in row ? Number((row as { coin_before?: number }).coin_before ?? 0) : 0,
           coinAfter: "coin_after" in row ? Number((row as { coin_after?: number }).coin_after ?? 0) : 0,
           delta:
