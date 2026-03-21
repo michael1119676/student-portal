@@ -111,6 +111,7 @@ export type SeasonNAdminStats = {
 const ROUND_COUNT = 12;
 const ANSWER_KEYS: Record<number, number[]> = {
   1: "23521114535424524333".split("").map(Number),
+  2: "11223545334224544333".split("").map(Number),
 };
 
 function normalizeDisplayClassName(value: string) {
