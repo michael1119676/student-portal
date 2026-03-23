@@ -221,6 +221,28 @@ export function isShopDeliveryToggleAllowed(productName: string) {
   return getShopProductDeliveryKind(productName) !== "instant";
 }
 
+export function getShopProductPrice(productName: string) {
+  const raw = String(productName || "").trim();
+  const normalized = normalizeProductName(productName);
+  if (!normalized) return null;
+
+  const currencyMatch = raw.match(/([0-9]{1,3}(?:,[0-9]{3})*)원/);
+  if (currencyMatch) {
+    const parsed = Number(currencyMatch[1].replace(/,/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  if (normalized.includes("마이쮸")) return 800;
+  if (normalized.includes("싱글레귤러")) return 3900;
+  if (normalized.includes("아이스 아메리카노")) return 4700;
+  if (normalized.includes("오븐바사삭") && normalized.includes("콜라")) return 21900;
+  if (normalized.includes("페로로 로쉐 t8")) return 9900;
+  if (normalized.includes("페레로로쉐 t16")) return 15900;
+  if (normalized.includes("패밀리") && normalized.includes("베스킨")) return 26000;
+
+  return null;
+}
+
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 function getUpcomingSaturdayKst(value: string | Date | null | undefined, order: 1 | 2) {
@@ -288,6 +310,34 @@ export function buildShopDeliveryScheduleText(options: {
   const targetDate = getUpcomingSaturdayKst(options.createdAt ?? null, kind === "gifticon" ? 1 : 2);
   if (!targetDate) return "-";
   return `${formatShopDeliveryDate(targetDate, { includeTime: true })} · 지급 예정`;
+}
+
+export function buildShopDeliveryDateText(options: {
+  createdAt: string | Date | null | undefined;
+  completedAt?: string | Date | null | undefined;
+  productName: string | null | undefined;
+  deliveryCompleted: boolean;
+}) {
+  const productName = String(options.productName || "").trim();
+  if (!productName || productName === "-") return "-";
+
+  const kind = getShopProductDeliveryKind(productName);
+  if (kind === "instant") {
+    return formatShopDeliveryDate(options.createdAt);
+  }
+
+  if (options.deliveryCompleted) {
+    return formatShopDeliveryDate(options.completedAt || options.createdAt, {
+      includeTime: true,
+    });
+  }
+
+  const targetDate = getUpcomingSaturdayKst(
+    options.createdAt ?? null,
+    kind === "gifticon" ? 1 : 2
+  );
+  if (!targetDate) return "-";
+  return formatShopDeliveryDate(targetDate, { includeTime: true });
 }
 
 export function maskStudentName(name: string) {

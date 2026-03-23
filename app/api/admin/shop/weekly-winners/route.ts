@@ -5,9 +5,11 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import {
+  buildShopDeliveryDateText,
   buildShopDeliveryScheduleText,
   getNSeasonWeekRange,
   getShopProductDeliveryKind,
+  getShopProductPrice,
   isShopDeliveryToggleAllowed,
 } from "@/lib/shop";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
   let { data, error } = await supabase
     .from("draw_logs")
     .select(
-      "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot, delivery_completed, coin_before, coin_after"
+      "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot, delivery_completed, delivery_completed_at, coin_before, coin_after"
     )
     .gte("created_at", startUtc.toISOString())
     .lt("created_at", endUtcExclusive.toISOString())
@@ -45,7 +47,7 @@ export async function GET(request: Request) {
     const fallback = await supabase
       .from("draw_logs")
       .select(
-        "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot, coin_before, coin_after"
+        "id, created_at, box_code, product_name, student_id, student_name_snapshot, student_phone_snapshot, delivery_completed_at, coin_before, coin_after"
       )
       .gte("created_at", startUtc.toISOString())
       .lt("created_at", endUtcExclusive.toISOString())
@@ -88,10 +90,24 @@ export async function GET(request: Request) {
         return {
           id: row.id,
           createdAt: row.created_at,
+          deliveryCompletedAt:
+            "delivery_completed_at" in row
+              ? (row as { delivery_completed_at?: string | null }).delivery_completed_at ?? null
+              : null,
           boxCode: row.box_code,
           productName: row.product_name,
+          productPrice: getShopProductPrice(row.product_name),
           deliveryKind,
           deliveryCompleted,
+          deliveryDateText: buildShopDeliveryDateText({
+            createdAt: row.created_at,
+            completedAt:
+              "delivery_completed_at" in row
+                ? (row as { delivery_completed_at?: string | null }).delivery_completed_at ?? null
+                : null,
+            productName: row.product_name,
+            deliveryCompleted,
+          }),
           deliveryScheduleText: buildShopDeliveryScheduleText({
             createdAt: row.created_at,
             productName: row.product_name,

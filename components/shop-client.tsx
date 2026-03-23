@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { buildShopDeliveryScheduleText } from "@/lib/shop";
+import { buildShopDeliveryDateText, buildShopDeliveryScheduleText } from "@/lib/shop";
 import { SessionUser } from "@/lib/session";
 
 type ShopBox = {
@@ -98,14 +98,17 @@ type StudentLogResponse = {
 type WeeklyWinner = {
   id: number;
   createdAt: string;
+  deliveryCompletedAt?: string | null;
   boxCode: string;
   productName: string;
+  productPrice: number | null;
   className: string | null;
   coinBefore: number;
   coinAfter: number;
   delta: number;
   deliveryKind: string;
   deliveryCompleted: boolean;
+  deliveryDateText: string;
   deliveryScheduleText: string;
   canToggleDelivery: boolean;
   studentId: string;
@@ -234,6 +237,11 @@ function formatKst(value: string | null | undefined) {
     second: "2-digit",
     hour12: false,
   }).format(date);
+}
+
+function formatWon(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return `${new Intl.NumberFormat("ko-KR").format(Math.round(value))}원`;
 }
 
 function boxBadgeClass(code: string) {
@@ -993,6 +1001,12 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
             : {
                 ...winner,
                 deliveryCompleted,
+                deliveryDateText: buildShopDeliveryDateText({
+                  createdAt: winner.createdAt,
+                  completedAt: deliveryCompleted ? new Date().toISOString() : null,
+                  productName: winner.productName,
+                  deliveryCompleted,
+                }),
                 deliveryScheduleText: buildShopDeliveryScheduleText({
                   createdAt: winner.createdAt,
                   productName: winner.productName,
@@ -1011,14 +1025,47 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
     }
   };
 
+  const handleDownloadManualDeliveryExcel = async () => {
+    if (!manualDeliveryWinners.length) {
+      setMessage("다운로드할 수동 지급 로그가 없습니다.");
+      return;
+    }
+
+    try {
+      const XLSX = await import("xlsx");
+      const rows = manualDeliveryWinners.map((winner) => ({
+        지급날짜: winner.deliveryDateText || "-",
+        이름: winner.studentName,
+        상품: winner.productName,
+        가격: winner.productPrice ?? "",
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      worksheet["!cols"] = [
+        { wch: 24 },
+        { wch: 14 },
+        { wch: 48 },
+        { wch: 12 },
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, `${week}주차 수동지급`);
+      XLSX.writeFile(workbook, `manual-delivery-week-${week}.xlsx`);
+      setMessage(`${week}주차 수동 지급 로그 엑셀을 다운로드했습니다.`);
+    } catch {
+      setMessage("엑셀 다운로드에 실패했습니다.");
+    }
+  };
+
   const renderWinnerTable = (rows: WeeklyWinner[], emptyMessage: string) => (
     <div className="overflow-x-auto rounded-2xl border border-white/10">
-      <table className="w-full min-w-[1540px] text-sm">
+      <table className="w-full min-w-[1680px] text-sm">
         <thead className="bg-black/40 text-white/65">
           <tr>
             <th className="px-3 py-2 text-left">날짜/시간</th>
             <th className="px-3 py-2 text-left">상자 종류</th>
             <th className="px-3 py-2 text-left">당첨 상품</th>
+            <th className="px-3 py-2 text-left">가격</th>
             <th className="px-3 py-2 text-left">당첨자 이름</th>
             <th className="px-3 py-2 text-left">당첨자 전화번호</th>
             <th className="px-3 py-2 text-left">반</th>
@@ -1037,6 +1084,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                 {BOX_CODE_TO_KO_NAME[winner.boxCode] ?? winner.boxCode.toUpperCase()}
               </td>
               <td className="px-3 py-2">{winner.productName}</td>
+              <td className="px-3 py-2">{formatWon(winner.productPrice)}</td>
               <td className="px-3 py-2">{winner.studentName}</td>
               <td className="px-3 py-2">{winner.studentPhone}</td>
               <td className="px-3 py-2">{winner.className || "-"}</td>
@@ -1070,7 +1118,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
           ))}
           {!rows.length && (
             <tr>
-              <td colSpan={11} className="px-3 py-4 text-center text-white/55">
+              <td colSpan={12} className="px-3 py-4 text-center text-white/55">
                 {emptyMessage}
               </td>
             </tr>
@@ -1861,7 +1909,7 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
 
               {(adminTab === "weeklyLogs" || adminTab === "manualDeliveryLogs") && (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <Label className="text-white/80">N 시즌 주차 선택</Label>
                     <select
                       value={week}
@@ -1879,6 +1927,15 @@ export default function ShopClient({ initialUser }: { initialUser: SessionUser }
                         </option>
                       ))}
                     </select>
+                    {adminTab === "manualDeliveryLogs" && (
+                      <Button
+                        variant="secondary"
+                        className="h-11 rounded-2xl bg-emerald-400/15 px-4 text-emerald-100 hover:bg-emerald-400/20 touch-manipulation"
+                        onClick={() => void handleDownloadManualDeliveryExcel()}
+                      >
+                        엑셀 다운로드
+                      </Button>
+                    )}
                   </div>
                   {adminTab === "weeklyLogs"
                     ? renderWinnerTable(weeklyWinners, "선택한 주차의 당첨 기록이 없습니다.")
