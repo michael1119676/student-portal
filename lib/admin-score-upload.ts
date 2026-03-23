@@ -90,6 +90,15 @@ type LocalSeasonAnswerRow = {
   timestamp?: string | null;
 };
 
+type LocalSeasonRoundsSource = {
+  rounds?: Record<
+    string,
+    {
+      rows?: LocalSeasonAnswerRow[];
+    }
+  >;
+};
+
 type SeasonAnswerUploadRow = {
   student_id: string;
   season: AnswerUploadSeason;
@@ -318,11 +327,13 @@ function getLocalSeasonRows(
   season: UploadSeason,
   round: number
 ): LocalSeasonAnswerRow[] {
+  const cRounds = seasonCRoundsRaw as LocalSeasonRoundsSource;
+  const nRounds = seasonNRoundsRaw as LocalSeasonRoundsSource;
   if (season === "C") {
-    return (seasonCRoundsRaw.rounds?.[String(round)]?.rows ?? []) as LocalSeasonAnswerRow[];
+    return cRounds.rounds?.[String(round)]?.rows ?? [];
   }
   if (season === "N") {
-    return (seasonNRoundsRaw.rounds?.[String(round)]?.rows ?? []) as LocalSeasonAnswerRow[];
+    return nRounds.rounds?.[String(round)]?.rows ?? [];
   }
   return [];
 }
