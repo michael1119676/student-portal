@@ -87,6 +87,26 @@ export async function GET(request: Request) {
     );
   }
 
+  const cOrNSeasons = seasons.filter((season) => season === "C" || season === "N");
+  const { data: answerRows, error: answerError } =
+    cOrNSeasons.length > 0
+      ? await supabase
+          .from("season_answer_responses")
+          .select("student_id, season, round, score")
+          .in(
+            "student_id",
+            studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"]
+          )
+          .in("season", cOrNSeasons)
+      : { data: [], error: null };
+
+  if (answerError) {
+    return NextResponse.json(
+      { ok: false, message: "학생 답안 성적 정보를 불러오지 못했습니다." },
+      { status: 500 }
+    );
+  }
+
   const studentMap = new Map(
     (students ?? []).map((student) => [
       student.id,
@@ -99,6 +119,12 @@ export async function GET(request: Request) {
   );
   const scoreMap = new Map(
     (scoreRows ?? []).map((row) => [
+      `${row.student_id}:${row.season}:${Number(row.round)}`,
+      row.score === null ? null : Number(row.score),
+    ])
+  );
+  const answerScoreMap = new Map(
+    (answerRows ?? []).map((row) => [
       `${row.student_id}:${row.season}:${Number(row.round)}`,
       row.score === null ? null : Number(row.score),
     ])
@@ -118,7 +144,9 @@ export async function GET(request: Request) {
         season: row.season,
         round: Number(row.round),
         score:
-          scoreMap.get(`${row.student_id}:${row.season}:${Number(row.round)}`) ?? null,
+          scoreMap.get(`${row.student_id}:${row.season}:${Number(row.round)}`) ??
+          answerScoreMap.get(`${row.student_id}:${row.season}:${Number(row.round)}`) ??
+          null,
         studentNote: row.student_note,
         adminComment: row.admin_comment,
         noteUpdatedAt: row.note_updated_at,

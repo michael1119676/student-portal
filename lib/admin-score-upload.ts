@@ -1,5 +1,7 @@
 import { parse as parseCsv } from "csv-parse/sync";
 import * as XLSX from "xlsx";
+import seasonCRoundsRaw from "@/data/season_c_rounds.json";
+import seasonNRoundsRaw from "@/data/season_n_rounds.json";
 import { createStudentScoreNotification } from "@/lib/notifications";
 import {
   getSeasonAnswerKey,
@@ -82,6 +84,12 @@ type ExistingScoreRecord = {
   round: number;
 };
 
+type LocalSeasonAnswerRow = {
+  name: string;
+  className: string;
+  timestamp?: string | null;
+};
+
 type SeasonAnswerUploadRow = {
   student_id: string;
   season: AnswerUploadSeason;
@@ -106,6 +114,13 @@ function normalizeClassName(value: string | null | undefined) {
   const normalized = String(value || "").trim();
   if (!normalized) return null;
   if (normalized === "녹화강의반") return "영상반";
+  return normalized;
+}
+
+function normalizeStudentName(value: string | null | undefined) {
+  const normalized = String(value || "").trim();
+  if (normalized === "김아안") return "김이안";
+  if (normalized === "임국혁") return "임국현";
   return normalized;
 }
 
@@ -276,6 +291,72 @@ function matchByPhoneSuffix(
   return students.filter((student) => normalizePhone(student.phone).endsWith(suffix));
 }
 
+function chooseStudentForLocalRow(
+  students: StudentRef[],
+  row: LocalSeasonAnswerRow
+) {
+  const name = normalizeStudentName(row.name);
+  const className = normalizeClassName(row.className);
+  const candidates = students.filter(
+    (student) => normalizeStudentName(student.name) === name
+  );
+
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+
+  const classMatched = className
+    ? candidates.filter(
+        (student) => normalizeClassName(student.class_name) === className
+      )
+    : [];
+
+  if (classMatched.length === 1) return classMatched[0];
+  return candidates[0];
+}
+
+function getLocalSeasonRows(
+  season: UploadSeason,
+  round: number
+): LocalSeasonAnswerRow[] {
+  if (season === "C") {
+    return (seasonCRoundsRaw.rounds?.[String(round)]?.rows ?? []) as LocalSeasonAnswerRow[];
+  }
+  if (season === "N") {
+    return (seasonNRoundsRaw.rounds?.[String(round)]?.rows ?? []) as LocalSeasonAnswerRow[];
+  }
+  return [];
+}
+
+function buildLocalExistingStudentIds(
+  season: UploadSeason,
+  round: number,
+  students: StudentRef[]
+) {
+  if (season !== "C" && season !== "N") {
+    return new Set<string>();
+  }
+
+  const latestRows = new Map<string, LocalSeasonAnswerRow>();
+  for (const row of getLocalSeasonRows(season, round)) {
+    const key = `${normalizeStudentName(row.name)}__${normalizeClassName(row.className) ?? ""}`;
+    const prev = latestRows.get(key);
+    const currentTime = row.timestamp ? Date.parse(row.timestamp) : 0;
+    const prevTime = prev?.timestamp ? Date.parse(prev.timestamp) : 0;
+    if (!prev || currentTime >= prevTime) {
+      latestRows.set(key, row);
+    }
+  }
+
+  const studentIds = new Set<string>();
+  for (const row of latestRows.values()) {
+    const matchedStudent = chooseStudentForLocalRow(students, row);
+    if (matchedStudent?.id) {
+      studentIds.add(matchedStudent.id);
+    }
+  }
+  return studentIds;
+}
+
 function prepareRows(
   season: UploadSeason,
   round: number,
@@ -284,6 +365,11 @@ function prepareRows(
   existingRecords: ExistingScoreRecord[]
 ) {
   const activeStudents = students.filter((student) => !student.is_deleted);
+  const localExistingStudentIds = buildLocalExistingStudentIds(
+    season,
+    round,
+    activeStudents
+  );
   const recordsByStudentId = new Set(
     existingRecords
       .filter(
@@ -292,10 +378,13 @@ function prepareRows(
       )
       .map((record) => record.student_id)
   );
+  for (const studentId of localExistingStudentIds) {
+    recordsByStudentId.add(studentId);
+  }
 
   const studentsByName = new Map<string, StudentRef[]>();
   for (const student of activeStudents) {
-    const key = student.name.trim();
+    const key = normalizeStudentName(student.name);
     const list = studentsByName.get(key) ?? [];
     list.push(student);
     studentsByName.set(key, list);
@@ -324,7 +413,7 @@ function prepareRows(
     }
 
     if (matchedStudents.length === 0 && row.name) {
-      const candidates = studentsByName.get(row.name.trim()) ?? [];
+      const candidates = studentsByName.get(normalizeStudentName(row.name)) ?? [];
       if (candidates.length === 1) {
         matchedStudents = candidates;
         matchedBy = "name";
@@ -481,30 +570,40 @@ export async function applyAdminScoreUpload(options: {
       continue;
     }
 
-    if (existing?.id) {
-      const { error: updateError } = await supabase
-        .from("exam_score_records")
-        .update({
-          score,
-          source_key: sourceKey,
-          recorded_by: options.adminId,
-          updated_at: now,
-        })
-        .eq("id", existing.id);
+    const shouldTreatAsUpdate = Boolean(existing?.id) || !row.isNewScoreRecord;
 
-      if (updateError) {
-        logs.push(`${row.studentName}: 성적 수정 실패`);
-        continue;
+    if (shouldTreatAsUpdate) {
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from("exam_score_records")
+          .update({
+            score,
+            source_key: sourceKey,
+            recorded_by: options.adminId,
+            updated_at: now,
+          })
+          .eq("id", existing.id);
+
+        if (updateError) {
+          logs.push(`${row.studentName}: 성적 수정 실패`);
+          continue;
+        }
       }
 
       updatedCountApplied += 1;
-      logs.push(`${row.studentName}: 성적 수정 완료 (${score}점)`);
+      logs.push(
+        existing?.id
+          ? `${row.studentName}: 성적 수정 완료 (${score}점)`
+          : `${row.studentName}: 기존 데이터 기준으로 답안/성적 갱신 처리 (${score}점)`
+      );
 
       await supabase.from("admin_action_logs").insert({
         admin_id: options.adminId,
-        action_type: "score_record_update",
+        action_type: existing?.id ? "score_record_update" : "score_upload_existing_sync",
         target_student_id: studentId,
-        reason: `${options.season} 시즌 ${options.round}회 파일 업로드 성적 수정`,
+        reason: existing?.id
+          ? `${options.season} 시즌 ${options.round}회 파일 업로드 성적 수정`
+          : `${options.season} 시즌 ${options.round}회 기존 응답 데이터 동기화`,
         before_data: null,
         after_data: {
           season: options.season,
@@ -513,6 +612,7 @@ export async function applyAdminScoreUpload(options: {
           sourceKey,
           sourceType: row.sourceType,
           rowNumber: row.rowNumber,
+          existingScoreRecord: Boolean(existing?.id),
         },
         created_at: now,
       });
