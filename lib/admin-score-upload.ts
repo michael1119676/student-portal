@@ -174,6 +174,21 @@ function getObjectValue(
   return null;
 }
 
+function getObjectValueContaining(
+  row: Record<string, unknown>,
+  keywords: string[]
+): unknown {
+  const normalizedKeywords = keywords.map((keyword) => keyword.trim());
+  for (const [key, value] of Object.entries(row)) {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) continue;
+    if (normalizedKeywords.every((keyword) => normalizedKey.includes(keyword))) {
+      return value;
+    }
+  }
+  return null;
+}
+
 function parseOmrCsvFile(
   season: UploadSeason,
   round: number,
@@ -244,6 +259,17 @@ function parseAnswerSheetWorkbook(
   });
 
   return rows.map((row, index) => {
+    const explicitScoreValue = getObjectValue(row, [
+      "점수",
+      "score",
+      "원점수",
+      "물리2 원점수",
+      "물2 원점수",
+    ]);
+    const inferredScoreValue =
+      explicitScoreValue ??
+      getObjectValueContaining(row, ["원점수"]) ??
+      getObjectValueContaining(row, ["점수"]);
     const answers = Array.from({ length: 20 }, (_, questionIndex) =>
       normalizeChoice(row[`${questionIndex + 1}번 답`])
     );
@@ -264,7 +290,7 @@ function parseAnswerSheetWorkbook(
         ) || null,
       phoneSuffix8: null,
       phoneSuffix4: null,
-      score: normalizeScore(getObjectValue(row, ["점수", "score"])),
+      score: normalizeScore(inferredScoreValue),
       answers,
     } satisfies ParsedUploadRow;
   }).map((row) => ({
