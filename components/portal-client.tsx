@@ -1297,6 +1297,8 @@ export default function PortalClient({
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [selectedNotificationDetail, setSelectedNotificationDetail] =
+    useState<PortalNotificationItem | null>(null);
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
   const [announcementAudience, setAnnouncementAudience] = useState<"all" | "single">("all");
@@ -1513,22 +1515,30 @@ export default function PortalClient({
       }
 
       setNotificationCenterOpen(false);
-
-      if (item.relatedPath === "/shop") {
-        window.location.href = "/shop";
-        return;
-      }
-
-      if (item.season && item.round && canShowStudentPortal) {
-        pushPortalHistoryEntry();
-        setSelectedSeason(item.season);
-        setSelectedRound(item.season === "C" ? item.round : null);
-        setSelectedNRound(item.season === "N" ? item.round : null);
-        setSelectedPremiumRound(isPremiumSeason(item.season) ? item.round : null);
-      }
+      setSelectedNotificationDetail({ ...item, read: true });
     },
-    [canShowStudentPortal, markNotificationsRead, pushPortalHistoryEntry]
+    [markNotificationsRead]
   );
+
+  const handleOpenNotificationDestination = useCallback(() => {
+    const item = selectedNotificationDetail;
+    if (!item) return;
+
+    setSelectedNotificationDetail(null);
+
+    if (item.relatedPath === "/shop") {
+      window.location.href = "/shop";
+      return;
+    }
+
+    if (item.season && item.round && canShowStudentPortal) {
+      pushPortalHistoryEntry();
+      setSelectedSeason(item.season);
+      setSelectedRound(item.season === "C" ? item.round : null);
+      setSelectedNRound(item.season === "N" ? item.round : null);
+      setSelectedPremiumRound(isPremiumSeason(item.season) ? item.round : null);
+    }
+  }, [canShowStudentPortal, pushPortalHistoryEntry, selectedNotificationDetail]);
 
   const handleMarkAllNotificationsRead = useCallback(async () => {
     try {
@@ -1681,6 +1691,17 @@ export default function PortalClient({
       document.body.style.overflow = originalOverflow;
     };
   }, [notificationCenterOpen, useCompactUi]);
+
+  useEffect(() => {
+    if (!selectedNotificationDetail) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [selectedNotificationDetail]);
 
   const selectedRoundDetail = useMemo(() => {
     if (!seasonCData || selectedRound === null) return null;
@@ -3344,6 +3365,83 @@ export default function PortalClient({
                     </div>
                   )}
                 </div>
+
+                {selectedNotificationDetail && (
+                  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+                    <button
+                      type="button"
+                      className="absolute inset-0 cursor-default"
+                      aria-label="알림 상세 닫기"
+                      onClick={() => setSelectedNotificationDetail(null)}
+                    />
+                    <div className="relative z-[71] w-full max-w-xl overflow-hidden rounded-[1.8rem] border border-white/10 bg-[#0c1017] shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+                      <div className="border-b border-white/10 px-5 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[11px] ${notificationTypeBadgeClass(
+                                  selectedNotificationDetail.type
+                                )}`}
+                              >
+                                {notificationTypeLabel(selectedNotificationDetail.type)}
+                              </span>
+                              {selectedNotificationDetail.isImportant && (
+                                <span className="rounded-full border border-amber-300/35 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100">
+                                  중요
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-3 text-lg font-semibold text-white">
+                              {selectedNotificationDetail.title}
+                            </p>
+                            <p className="mt-2 text-xs text-white/45">
+                              {formatKst(selectedNotificationDetail.createdAt)}
+                            </p>
+                          </div>
+                          <Button
+                            variant="secondary"
+                            className="h-10 rounded-xl bg-white/10 px-3 text-white hover:bg-white/20 touch-manipulation"
+                            onClick={() => setSelectedNotificationDetail(null)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-[min(60vh,520px)] overflow-y-auto px-5 py-5">
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4">
+                          <p className="whitespace-pre-wrap break-words text-sm leading-7 text-white/80">
+                            {selectedNotificationDetail.body}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 px-5 py-4">
+                        <Button
+                          variant="secondary"
+                          className="h-10 rounded-xl bg-white/10 px-4 text-white hover:bg-white/20 touch-manipulation"
+                          onClick={() => setSelectedNotificationDetail(null)}
+                        >
+                          닫기
+                        </Button>
+                        {(selectedNotificationDetail.relatedPath === "/shop" ||
+                          (selectedNotificationDetail.season &&
+                            selectedNotificationDetail.round &&
+                            canShowStudentPortal)) && (
+                          <Button
+                            className="h-10 rounded-xl bg-white px-4 text-black hover:bg-white/90 touch-manipulation"
+                            onClick={handleOpenNotificationDestination}
+                          >
+                            {selectedNotificationDetail.relatedPath === "/shop"
+                              ? "상점으로 이동"
+                              : "해당 성적 보기"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {isAdminMode && selectedStudent && (
                   <Button
