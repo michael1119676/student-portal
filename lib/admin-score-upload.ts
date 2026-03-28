@@ -4,9 +4,11 @@ import seasonCRoundsRaw from "@/data/season_c_rounds.json";
 import seasonNRoundsRaw from "@/data/season_n_rounds.json";
 import { createStudentScoreNotification } from "@/lib/notifications";
 import {
+  fetchSeasonAnswerConfigMap,
   getSeasonAnswerKey,
   getSeasonQuestionCount,
   scoreAnswersForSeason,
+  type AnswerConfigMap,
   type AnswerUploadSeason,
 } from "@/lib/season-answer-config";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -193,7 +195,8 @@ function parseOmrCsvFile(
   season: UploadSeason,
   round: number,
   fileName: string,
-  buffer: Buffer
+  buffer: Buffer,
+  answerConfigMap?: AnswerConfigMap
 ) {
   if (season !== "N" && season !== "C") {
     throw new Error("OMR CSV 업로드는 현재 C/N 시즌에서만 지원합니다.");
@@ -205,9 +208,13 @@ function parseOmrCsvFile(
     trim: true,
   }) as Record<string, string>[];
 
-  const answerKey = getSeasonAnswerKey(season as AnswerUploadSeason, round);
+  const answerKey = getSeasonAnswerKey(
+    season as AnswerUploadSeason,
+    round,
+    answerConfigMap
+  );
   const questionCount =
-    getSeasonQuestionCount(season as AnswerUploadSeason, round) || 20;
+    getSeasonQuestionCount(season as AnswerUploadSeason, round, answerConfigMap) || 20;
   if (!answerKey?.length) {
     throw new Error(
       `${season} 시즌 ${round}회 정답 키가 등록되지 않아 CSV 점수를 계산할 수 없습니다.`
@@ -219,7 +226,12 @@ function parseOmrCsvFile(
     const answers = Array.from({ length: questionCount }, (_, questionIndex) =>
       normalizeChoice(record[`q${questionIndex + 1}`])
     );
-    const score = scoreAnswersForSeason(season as AnswerUploadSeason, round, answers);
+    const score = scoreAnswersForSeason(
+      season as AnswerUploadSeason,
+      round,
+      answers,
+      answerConfigMap
+    );
     if (score === null) {
       throw new Error(`${fileName} ${index + 2}행의 점수를 계산하지 못했습니다.`);
     }
@@ -304,11 +316,12 @@ function parseUploadRows(
   season: UploadSeason,
   round: number,
   fileName: string,
-  buffer: Buffer
+  buffer: Buffer,
+  answerConfigMap?: AnswerConfigMap
 ) {
   const extension = getFileExtension(fileName);
   if (extension === ".csv") {
-    return parseOmrCsvFile(season, round, fileName, buffer);
+    return parseOmrCsvFile(season, round, fileName, buffer, answerConfigMap);
   }
 
   if (extension === ".xlsx" || extension === ".xls") {
@@ -399,7 +412,8 @@ function prepareRows(
   round: number,
   parsedRows: ParsedUploadRow[],
   students: StudentRef[],
-  existingRecords: ExistingScoreRecord[]
+  existingRecords: ExistingScoreRecord[],
+  answerConfigMap?: AnswerConfigMap
 ) {
   const activeStudents = students.filter((student) => !student.is_deleted);
   const localExistingStudentIds = buildLocalExistingStudentIds(
@@ -484,7 +498,7 @@ function prepareRows(
       row.score !== null
         ? row.score
         : season === "C" || season === "N"
-          ? scoreAnswersForSeason(season, round, row.answers)
+          ? scoreAnswersForSeason(season, round, row.answers, answerConfigMap)
           : null;
 
     return {
@@ -513,7 +527,17 @@ export async function buildAdminScoreUploadPreview(options: {
 }) {
   const supabase = createAdminClient();
   const { season, round, fileName, fileBuffer } = options;
-  const parsedRows = parseUploadRows(season, round, fileName, fileBuffer);
+  const answerConfigMap =
+    season === "C" || season === "N"
+      ? await fetchSeasonAnswerConfigMap(season)
+      : undefined;
+  const parsedRows = parseUploadRows(
+    season,
+    round,
+    fileName,
+    fileBuffer,
+    answerConfigMap
+  );
 
   const { data: students, error: studentError } = await supabase
     .from("students")
@@ -539,7 +563,8 @@ export async function buildAdminScoreUploadPreview(options: {
     round,
     parsedRows,
     students as StudentRef[],
-    (existingRecords ?? []) as ExistingScoreRecord[]
+    (existingRecords ?? []) as ExistingScoreRecord[],
+    answerConfigMap
   );
 
   const rows: AdminScoreUploadPreviewRow[] = preparedRows.map((row) => ({

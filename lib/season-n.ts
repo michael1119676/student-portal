@@ -1,5 +1,10 @@
 import seasonNRoundsRaw from "@/data/season_n_rounds.json";
-import { getSeasonAnswerKey } from "@/lib/season-answer-config";
+import {
+  getSeasonAnswerKey,
+  getSeasonQuestionCount,
+  scoreAnswersForSeason,
+  type AnswerConfigMap,
+} from "@/lib/season-answer-config";
 
 type StudentRef = {
   id: string;
@@ -215,12 +220,23 @@ function mergeRoundRows(baseRows: RawRoundRow[], uploadedRows: RawRoundRow[]) {
   return dedupeLatestRows([...baseRows, ...uploadedRows]);
 }
 
-function getRawRound(data: RawSeasonNData, round: number): RawRound {
-  return data.rounds[String(round)] ?? { questionCount: 0, rows: [] };
+function getRawRound(
+  data: RawSeasonNData,
+  round: number,
+  answerConfigMap?: AnswerConfigMap
+): RawRound {
+  return data.rounds[String(round)] ?? {
+    questionCount: getSeasonQuestionCount("N", round, answerConfigMap),
+    rows: [],
+  };
 }
 
-function buildRoundRows(round: number, rawRound: RawRound, students: StudentRef[]) {
-  void round;
+function buildRoundRows(
+  round: number,
+  rawRound: RawRound,
+  students: StudentRef[],
+  answerConfigMap?: AnswerConfigMap
+) {
   const byName = buildNameToStudentsMap(students);
   const deduped = dedupeLatestRows(rawRound.rows);
   const rows: RoundRow[] = [];
@@ -230,11 +246,14 @@ function buildRoundRows(round: number, rawRound: RawRound, students: StudentRef[
     const matched = chooseStudentByClass(candidates, row.className);
     if (!matched) continue;
 
+    const answers = row.answers.map((choice) => normalizeChoice(choice));
+    const scoreFromAnswers = scoreAnswersForSeason("N", round, answers, answerConfigMap);
+
     rows.push({
       studentId: matched.id,
       className: normalizeDisplayClassName(matched.class_name || row.className || "미분류"),
-      score: normalizeScore(row.score),
-      answers: row.answers.map((choice) => normalizeChoice(choice)),
+      score: scoreFromAnswers ?? normalizeScore(row.score),
+      answers,
     });
   }
 
@@ -342,19 +361,20 @@ export function buildSeasonNViewData(
   students: StudentRef[],
   targetStudentId: string,
   cutoffsByRound: Record<number, { cut1: number | null; cut2: number | null; cut3: number | null }>,
-  uploadedRowsByRound: Record<number, RawRoundRow[]> = {}
+  uploadedRowsByRound: Record<number, RawRoundRow[]> = {},
+  answerConfigMap: AnswerConfigMap = {}
 ) {
   const data = seasonNRoundsRaw as RawSeasonNData;
   const rounds: SeasonNRoundSummary[] = [];
   const details: SeasonNRoundDetail[] = [];
 
   for (let round = 1; round <= ROUND_COUNT; round += 1) {
-    const rawRound = getRawRound(data, round);
+    const rawRound = getRawRound(data, round, answerConfigMap);
     const mergedRound: RawRound = {
       questionCount: rawRound.questionCount,
       rows: mergeRoundRows(rawRound.rows, uploadedRowsByRound[round] ?? []),
     };
-    const rows = buildRoundRows(round, mergedRound, students);
+    const rows = buildRoundRows(round, mergedRound, students, answerConfigMap);
     const scores = rows
       .map((row) => row.score)
       .filter((score): score is number => score !== null);
@@ -365,8 +385,12 @@ export function buildSeasonNViewData(
     const myRow = rows.find((row) => row.studentId === targetStudentId) ?? null;
     const myScore = myRow?.score ?? null;
     const myAnswers = myRow?.answers ?? [];
-    const answerKey = getSeasonAnswerKey("N", round) ?? [];
-    const questionCount = Math.max(mergedRound.questionCount, answerKey.length);
+    const answerKey = getSeasonAnswerKey("N", round, answerConfigMap) ?? [];
+    const questionCount = Math.max(
+      mergedRound.questionCount,
+      getSeasonQuestionCount("N", round, answerConfigMap),
+      answerKey.length
+    );
     const myStdScore = computeStdScore(myScore, rawAverageScore);
     const cutoff = cutoffsByRound[round] ?? { cut1: null, cut2: null, cut3: null };
 
@@ -396,21 +420,26 @@ export function buildSeasonNViewData(
 export function buildSeasonNAdminStats(
   students: StudentRef[],
   round: number,
-  uploadedRowsByRound: Record<number, RawRoundRow[]> = {}
+  uploadedRowsByRound: Record<number, RawRoundRow[]> = {},
+  answerConfigMap: AnswerConfigMap = {}
 ): SeasonNAdminStats {
   const data = seasonNRoundsRaw as RawSeasonNData;
   const safeRound = Math.max(1, Math.min(ROUND_COUNT, Math.round(round)));
-  const rawRound = getRawRound(data, safeRound);
+  const rawRound = getRawRound(data, safeRound, answerConfigMap);
   const mergedRound: RawRound = {
     questionCount: rawRound.questionCount,
     rows: mergeRoundRows(rawRound.rows, uploadedRowsByRound[safeRound] ?? []),
   };
-  const rows = buildRoundRows(safeRound, mergedRound, students);
+  const rows = buildRoundRows(safeRound, mergedRound, students, answerConfigMap);
   const scores = rows
     .map((row) => row.score)
     .filter((score): score is number => score !== null);
-  const answerKey = getSeasonAnswerKey("N", safeRound) ?? [];
-  const questionCount = Math.max(mergedRound.questionCount, answerKey.length);
+  const answerKey = getSeasonAnswerKey("N", safeRound, answerConfigMap) ?? [];
+  const questionCount = Math.max(
+    mergedRound.questionCount,
+    getSeasonQuestionCount("N", safeRound, answerConfigMap),
+    answerKey.length
+  );
   const questionStats = buildQuestionStats(rows, questionCount, answerKey, []);
   const weakQuestions = questionStats
     .map((question) => {

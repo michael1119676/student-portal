@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUserFromCookies, unauthorizedResponse } from "@/lib/api-auth";
+import { fetchSeasonAnswerConfigMap } from "@/lib/season-answer-config";
 import { fetchUploadedAnswerRowsByRound } from "@/lib/season-answer-responses";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonCAdminStats } from "@/lib/season-c";
@@ -83,10 +84,14 @@ export async function GET(request: Request) {
     season === "N"
       ? await fetchUploadedAnswerRowsByRound("N")
       : await fetchUploadedAnswerRowsByRound("C");
+  const answerConfigMap =
+    season === "N"
+      ? await fetchSeasonAnswerConfigMap("N")
+      : await fetchSeasonAnswerConfigMap("C");
   const stats =
     season === "N"
-      ? buildSeasonNAdminStats(students, round, uploadedRowsByRound)
-      : buildSeasonCAdminStats(students, round, uploadedRowsByRound);
+      ? buildSeasonNAdminStats(students, round, uploadedRowsByRound, answerConfigMap)
+      : buildSeasonCAdminStats(students, round, uploadedRowsByRound, answerConfigMap);
   return NextResponse.json({
     ok: true,
     stats,

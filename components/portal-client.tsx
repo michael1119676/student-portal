@@ -361,6 +361,32 @@ type AdminScoreUploadApplyResult = AdminScoreUploadPreview & {
   logs: string[];
 };
 
+type AdminAnswerConfigPreviewRow = {
+  rowNumber: number;
+  question: number | null;
+  answer: number | null;
+  weight: number | null;
+  status: "valid" | "invalid";
+  reason: string | null;
+};
+
+type AdminAnswerConfigPreview = {
+  season: "C" | "N";
+  round: number;
+  fileName: string;
+  questionCount: number;
+  validCount: number;
+  invalidCount: number;
+  totalWeight: number;
+  scoreMode: "percent100" | "weighted";
+  answerKeyPreview: string;
+  rows: AdminAnswerConfigPreviewRow[];
+};
+
+type AdminAnswerConfigApplyResult = AdminAnswerConfigPreview & {
+  logs: string[];
+};
+
 type PortalHistoryState = {
   __portalNav: true;
   selectedSeason: string | null;
@@ -1267,6 +1293,17 @@ export default function PortalClient({
   const [adminUploadLogs, setAdminUploadLogs] = useState<string[]>([]);
   const [adminUploadPreviewLoading, setAdminUploadPreviewLoading] = useState(false);
   const [adminUploadApplyLoading, setAdminUploadApplyLoading] = useState(false);
+  const [adminAnswerConfigSeason, setAdminAnswerConfigSeason] = useState<"C" | "N">("N");
+  const [adminAnswerConfigRound, setAdminAnswerConfigRound] = useState(1);
+  const [adminAnswerConfigFile, setAdminAnswerConfigFile] = useState<File | null>(null);
+  const [adminAnswerConfigPreview, setAdminAnswerConfigPreview] =
+    useState<AdminAnswerConfigPreview | null>(null);
+  const [adminAnswerConfigMessage, setAdminAnswerConfigMessage] = useState("");
+  const [adminAnswerConfigLogs, setAdminAnswerConfigLogs] = useState<string[]>([]);
+  const [adminAnswerConfigPreviewLoading, setAdminAnswerConfigPreviewLoading] =
+    useState(false);
+  const [adminAnswerConfigApplyLoading, setAdminAnswerConfigApplyLoading] =
+    useState(false);
   const [statsSeason, setStatsSeason] = useState<"C" | "M" | "N" | PremiumSeasonCode>("C");
   const [statsRound, setStatsRound] = useState(1);
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
@@ -1339,6 +1376,13 @@ export default function PortalClient({
           : Array.from({ length: 10 }, (_, i) => i + 1),
     [adminUploadSeason]
   );
+  const adminAnswerConfigRoundOptions = useMemo(
+    () =>
+      adminAnswerConfigSeason === "N"
+        ? Array.from({ length: 12 }, (_, i) => i + 1)
+        : Array.from({ length: 10 }, (_, i) => i + 1),
+    [adminAnswerConfigSeason]
+  );
   const statsRoundOptions = useMemo(
     () =>
       statsSeason === "N"
@@ -1381,6 +1425,12 @@ export default function PortalClient({
       setAdminUploadRound(adminUploadRoundOptions[0] ?? 1);
     }
   }, [adminUploadRound, adminUploadRoundOptions]);
+
+  useEffect(() => {
+    if (!adminAnswerConfigRoundOptions.includes(adminAnswerConfigRound)) {
+      setAdminAnswerConfigRound(adminAnswerConfigRoundOptions[0] ?? 1);
+    }
+  }, [adminAnswerConfigRound, adminAnswerConfigRoundOptions]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 768px)");
@@ -2982,6 +3032,103 @@ export default function PortalClient({
     }
   }
 
+  function downloadAdminAnswerConfigTemplate(format: "csv" | "xlsx") {
+    if (typeof window === "undefined") return;
+    const href = `/api/admin/answer-config-template?season=${encodeURIComponent(
+      adminAnswerConfigSeason
+    )}&round=${encodeURIComponent(String(adminAnswerConfigRound))}&format=${encodeURIComponent(
+      format
+    )}`;
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.rel = "noreferrer";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  async function submitAdminAnswerConfigUpload(mode: "preview" | "apply") {
+    if (!isAdminMode) return;
+
+    if (!adminAnswerConfigFile) {
+      setAdminAnswerConfigMessage("업로드할 정답/배점 파일을 먼저 선택해주세요.");
+      return;
+    }
+
+    if (mode === "apply" && !adminAnswerConfigPreview) {
+      setAdminAnswerConfigMessage("먼저 미리보기를 확인해주세요.");
+      return;
+    }
+
+    const setLoading =
+      mode === "preview"
+        ? setAdminAnswerConfigPreviewLoading
+        : setAdminAnswerConfigApplyLoading;
+    setLoading(true);
+    setAdminAnswerConfigMessage("");
+
+    if (mode === "preview") {
+      setAdminAnswerConfigLogs([]);
+      setAdminAnswerConfigPreview(null);
+    }
+
+    try {
+      const formData = new FormData();
+      formData.set("mode", mode);
+      formData.set("season", adminAnswerConfigSeason);
+      formData.set("round", String(adminAnswerConfigRound));
+      formData.set("file", adminAnswerConfigFile);
+
+      const res = await fetch("/api/admin/answer-config-upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setAdminAnswerConfigMessage(
+          data.message || "정답/배점 업로드 처리에 실패했습니다."
+        );
+        return;
+      }
+
+      if (mode === "preview") {
+        setAdminAnswerConfigPreview(data.preview as AdminAnswerConfigPreview);
+        setAdminAnswerConfigMessage(data.message || "미리보기를 불러왔습니다.");
+        return;
+      }
+
+      const result = data.result as AdminAnswerConfigApplyResult;
+      setAdminAnswerConfigPreview({
+        season: result.season,
+        round: result.round,
+        fileName: result.fileName,
+        questionCount: result.questionCount,
+        validCount: result.validCount,
+        invalidCount: result.invalidCount,
+        totalWeight: result.totalWeight,
+        scoreMode: result.scoreMode,
+        answerKeyPreview: result.answerKeyPreview,
+        rows: result.rows,
+      });
+      setAdminAnswerConfigLogs(result.logs);
+      setAdminAnswerConfigMessage(data.message || "정답/배점 저장이 완료되었습니다.");
+
+      if (selectedSeason === "C") {
+        setSeasonCData(null);
+        setSeasonCLoadedForId(null);
+      }
+      if (selectedSeason === "N") {
+        setSeasonNData(null);
+        setSeasonNLoadedForId(null);
+      }
+    } catch {
+      setAdminAnswerConfigMessage("정답/배점 업로드 처리 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function closeProfileModal() {
     setIsEditingProfile(false);
     setSaveMessage("");
@@ -4167,6 +4314,224 @@ export default function PortalClient({
                               </div>
                             </div>
                           )}
+
+                          <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-black/20 p-5">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 text-white">
+                                <Shield className="h-4 w-4 text-amber-200" />
+                                <p className="text-lg font-semibold">정답 / 배점 업로드</p>
+                              </div>
+                              <p className="text-sm text-white/55">
+                                C/N 시즌의 회차별 정답과 배점을 파일로 저장합니다.
+                                저장된 정답/배점은 학생 답안 업로드와 통계 계산에 바로 사용됩니다.
+                              </p>
+                            </div>
+
+                            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                              <div className="space-y-2">
+                                <Label className="text-white/75">대상 시즌</Label>
+                                <select
+                                  value={adminAnswerConfigSeason}
+                                  onChange={(e) => {
+                                    const value = e.target.value as "C" | "N";
+                                    setAdminAnswerConfigSeason(value);
+                                    setAdminAnswerConfigPreview(null);
+                                    setAdminAnswerConfigLogs([]);
+                                    setAdminAnswerConfigMessage("");
+                                  }}
+                                  className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                                >
+                                  <option value="C" className="bg-slate-900 text-white">
+                                    C 시즌
+                                  </option>
+                                  <option value="N" className="bg-slate-900 text-white">
+                                    N 시즌
+                                  </option>
+                                </select>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-white/75">대상 회차</Label>
+                                <select
+                                  value={adminAnswerConfigRound}
+                                  onChange={(e) => {
+                                    setAdminAnswerConfigRound(Number(e.target.value));
+                                    setAdminAnswerConfigPreview(null);
+                                    setAdminAnswerConfigLogs([]);
+                                    setAdminAnswerConfigMessage("");
+                                  }}
+                                  className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white"
+                                >
+                                  {adminAnswerConfigRoundOptions.map((round) => (
+                                    <option
+                                      key={`answer-config-round-${adminAnswerConfigSeason}-${round}`}
+                                      value={round}
+                                      className="bg-slate-900 text-white"
+                                    >
+                                      {round}회
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-white/75">파일 선택</Label>
+                                <Input
+                                  type="file"
+                                  accept=".xlsx,.xls,.csv"
+                                  onChange={(e) => {
+                                    setAdminAnswerConfigFile(e.target.files?.[0] ?? null);
+                                    setAdminAnswerConfigPreview(null);
+                                    setAdminAnswerConfigLogs([]);
+                                    setAdminAnswerConfigMessage("");
+                                  }}
+                                  className="h-11 rounded-xl border-white/10 bg-black/30 text-white file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1 file:text-white"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap gap-3">
+                              <Button
+                                variant="secondary"
+                                className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                                onClick={() => downloadAdminAnswerConfigTemplate("xlsx")}
+                              >
+                                엑셀 템플릿 받기
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                className="rounded-2xl bg-white/10 text-white hover:bg-white/20"
+                                onClick={() => downloadAdminAnswerConfigTemplate("csv")}
+                              >
+                                CSV 템플릿 받기
+                              </Button>
+                              <Button
+                                className="rounded-2xl bg-white text-black hover:bg-white/90"
+                                onClick={() => submitAdminAnswerConfigUpload("preview")}
+                                disabled={
+                                  adminAnswerConfigPreviewLoading ||
+                                  adminAnswerConfigApplyLoading
+                                }
+                              >
+                                {adminAnswerConfigPreviewLoading
+                                  ? "미리보기 불러오는 중..."
+                                  : "정답/배점 미리보기"}
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                className="rounded-2xl bg-amber-300/15 text-amber-100 hover:bg-amber-300/20"
+                                onClick={() => submitAdminAnswerConfigUpload("apply")}
+                                disabled={
+                                  !adminAnswerConfigPreview ||
+                                  adminAnswerConfigPreviewLoading ||
+                                  adminAnswerConfigApplyLoading
+                                }
+                              >
+                                {adminAnswerConfigApplyLoading ? "저장 중..." : "정답/배점 저장"}
+                              </Button>
+                            </div>
+
+                            {adminAnswerConfigMessage && (
+                              <p className="mt-4 text-sm text-white/70">
+                                {adminAnswerConfigMessage}
+                              </p>
+                            )}
+
+                            {adminAnswerConfigPreview && (
+                              <div className="mt-5 space-y-4">
+                                <div className="grid gap-3 sm:grid-cols-4">
+                                  <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3">
+                                    <p className="text-xs text-white/55">유효 행</p>
+                                    <p className="mt-1 text-2xl font-semibold text-emerald-200">
+                                      {adminAnswerConfigPreview.validCount}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-2xl border border-rose-300/20 bg-rose-400/10 px-4 py-3">
+                                    <p className="text-xs text-white/55">오류 행</p>
+                                    <p className="mt-1 text-2xl font-semibold text-rose-200">
+                                      {adminAnswerConfigPreview.invalidCount}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                    <p className="text-xs text-white/55">문항 수</p>
+                                    <p className="mt-1 text-2xl font-semibold text-white">
+                                      {adminAnswerConfigPreview.questionCount}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                    <p className="text-xs text-white/55">
+                                      {adminAnswerConfigPreview.scoreMode === "weighted"
+                                        ? "총 배점"
+                                        : "총 가중치"}
+                                    </p>
+                                    <p className="mt-1 text-2xl font-semibold text-white">
+                                      {adminAnswerConfigPreview.totalWeight}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="rounded-[1.2rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65">
+                                  파일:{" "}
+                                  <span className="font-semibold text-white/85">
+                                    {adminAnswerConfigPreview.fileName}
+                                  </span>
+                                  {" · "}대상:{" "}
+                                  <span className="font-semibold text-white/85">
+                                    {adminAnswerConfigPreview.season} 시즌 {adminAnswerConfigPreview.round}회
+                                  </span>
+                                  {" · "}정답 미리보기:{" "}
+                                  <span className="font-semibold tracking-[0.18em] text-white/85">
+                                    {adminAnswerConfigPreview.answerKeyPreview || "-"}
+                                  </span>
+                                </div>
+
+                                <div className="max-h-80 overflow-y-auto rounded-[1.2rem] border border-white/10">
+                                  <table className="min-w-full text-sm text-white/75">
+                                    <thead className="bg-white/5 text-xs uppercase tracking-[0.2em] text-white/45">
+                                      <tr>
+                                        <th className="px-3 py-3 text-left">행</th>
+                                        <th className="px-3 py-3 text-left">문항</th>
+                                        <th className="px-3 py-3 text-left">정답</th>
+                                        <th className="px-3 py-3 text-left">배점</th>
+                                        <th className="px-3 py-3 text-left">상태</th>
+                                        <th className="px-3 py-3 text-left">비고</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {adminAnswerConfigPreview.rows.map((row) => (
+                                        <tr
+                                          key={`answer-config-preview-${row.rowNumber}-${row.question ?? "x"}`}
+                                          className="border-t border-white/5 align-top"
+                                        >
+                                          <td className="px-3 py-3">{row.rowNumber}</td>
+                                          <td className="px-3 py-3">{row.question ?? "-"}</td>
+                                          <td className="px-3 py-3">{row.answer ?? "-"}</td>
+                                          <td className="px-3 py-3">{row.weight ?? "-"}</td>
+                                          <td className="px-3 py-3">
+                                            {row.status === "valid" ? "정상" : "오류"}
+                                          </td>
+                                          <td className="px-3 py-3 text-white/55">
+                                            {row.reason ?? "-"}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                            {adminAnswerConfigLogs.length > 0 && (
+                              <div className="mt-5 rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm font-semibold text-white">적용 결과 로그</p>
+                                <div className="mt-3 max-h-52 space-y-2 overflow-y-auto text-sm text-white/65">
+                                  {adminAnswerConfigLogs.map((log, index) => (
+                                    <p key={`answer-config-log-${index}`}>{log}</p>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
