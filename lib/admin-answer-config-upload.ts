@@ -141,9 +141,13 @@ function validateAnswerConfigRows(
       continue;
     }
 
-    const safeQuestion = Math.round(row.question);
-    const safeAnswer = Math.round(row.answer);
-    const safeWeight = Number(row.weight);
+    const safeQuestion = row.question;
+    const safeAnswer = row.answer;
+    const safeWeight = row.weight;
+
+    if (safeQuestion === null || safeAnswer === null || safeWeight === null) {
+      continue;
+    }
 
     seenQuestions.add(safeQuestion);
     validRows.set(safeQuestion, {
