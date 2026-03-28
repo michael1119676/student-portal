@@ -30,6 +30,11 @@ const N_ANSWER_CONFIGS: Record<number, AnswerConfig> = {
     scoreMode: "weighted",
     questionWeights: [2, 3, 2, 2, 3, 3, 2, 2, 3, 2, 3, 2, 2, 3, 3, 3, 3, 2, 3, 2],
   },
+  3: {
+    answerKey: "25125533353124145443".split("").map(Number),
+    scoreMode: "weighted",
+    questionWeights: [2, 3, 3, 2, 3, 2, 3, 2, 2, 2, 2, 3, 3, 2, 3, 3, 3, 3, 2, 2],
+  },
 };
 
 function normalizeChoice(value: number | string | null | undefined) {
