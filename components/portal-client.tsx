@@ -1309,6 +1309,7 @@ export default function PortalClient({
   const [adminStats, setAdminStats] = useState<AdminStatsResponse["stats"] | null>(null);
   const [adminStatsLoading, setAdminStatsLoading] = useState(false);
   const [adminStatsError, setAdminStatsError] = useState("");
+  const [adminStatsRefreshKey, setAdminStatsRefreshKey] = useState(0);
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentPhone, setNewStudentPhone] = useState("");
   const [newStudentPin, setNewStudentPin] = useState("1111");
@@ -2005,8 +2006,15 @@ export default function PortalClient({
         if (!cancelled) {
           setSeasonCData(data.data);
           setSeasonCLoadedForId(visibleUser.id);
+          const preservedRound =
+            selectedRound !== null &&
+            data.data.details.some((detail) => detail.round === selectedRound)
+              ? selectedRound
+              : null;
           const defaultRound =
-            data.data.rounds.find((round) => round.myScore !== null)?.round ?? 1;
+            preservedRound ??
+            data.data.rounds.find((round) => round.myScore !== null)?.round ??
+            1;
           setSelectedRound(defaultRound);
         }
       } catch {
@@ -2067,7 +2075,15 @@ export default function PortalClient({
         if (!cancelled) {
           setSeasonNData(data.data);
           setSeasonNLoadedForId(visibleUser.id);
-          const defaultRound = data.data.rounds.find((r) => r.myScore !== null)?.round ?? 1;
+          const preservedRound =
+            selectedNRound !== null &&
+            data.data.details.some((detail) => detail.round === selectedNRound)
+              ? selectedNRound
+              : null;
+          const defaultRound =
+            preservedRound ??
+            data.data.rounds.find((r) => r.myScore !== null)?.round ??
+            1;
           setSelectedNRound(defaultRound);
         }
       } catch {
@@ -2397,7 +2413,7 @@ export default function PortalClient({
     return () => {
       cancelled = true;
     };
-  }, [isAdminMode, adminStep, statsSeason, statsRound]);
+  }, [isAdminMode, adminStep, statsSeason, statsRound, adminStatsRefreshKey]);
 
   useEffect(() => {
     if (statsRoundOptions.includes(statsRound)) return;
@@ -3121,6 +3137,18 @@ export default function PortalClient({
       if (selectedSeason === "N") {
         setSeasonNData(null);
         setSeasonNLoadedForId(null);
+      }
+      if (statsSeason === result.season) {
+        setAdminStats(null);
+        setAdminStatsRefreshKey((prev) => prev + 1);
+      }
+      if (
+        adminUploadFile &&
+        adminUploadSeason === result.season &&
+        adminUploadRound === result.round
+      ) {
+        setAdminUploadMessage("정답 기준이 바뀌어 점수 업로드 미리보기를 다시 계산합니다.");
+        void submitAdminScoreUpload("preview");
       }
     } catch {
       setAdminAnswerConfigMessage("정답/배점 업로드 처리 중 오류가 발생했습니다.");

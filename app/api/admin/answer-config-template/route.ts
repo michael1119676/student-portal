@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       format,
     });
 
-    return new NextResponse(file.body, {
+    return new NextResponse(new Uint8Array(file.body), {
       headers: {
         "Content-Type": file.contentType,
         "Content-Disposition": `attachment; filename="${file.fileName}"`,
